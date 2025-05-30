@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Users;
 use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
 
 class UsersController extends Controller
 {
@@ -34,6 +35,52 @@ class UsersController extends Controller
       }
    }
 
+    public function socialLogin(Request $request)
+    {
+        $this->validate($request, [
+            'provider' => 'required|in:facebook,google',
+            'access_token' => 'required',
+            'role_id' => 'required|integer'
+        ]);
+
+        try {
+            $socialUser = Socialite::driver($request->input('provider'))->stateless()->userFromToken($request->input('access_token'));
+
+            $user = Users::where('email', $socialUser->getEmail())->first();
+
+            if (!$user) {
+                $user = Users::create([
+                    'first_name' => $socialUser->getName(),
+                    'last_name' => '',
+                    'email' => $socialUser->getEmail(),
+                    'password' => Hash::make(Str::random(16)),
+                    'name' => $socialUser->getName(),
+                    'role_id' => $request->input('role_id'),
+                    'super_host' => 0,
+                ]);
+            }
+
+            // If you use JWT, generate token here
+            $token = base64_encode(Str::random(40)); // Replace with JWT if needed
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'User authenticated',
+                'data' => [
+                    'user' => $user->fresh(),
+                    'api_key' => $token
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Social login failed',
+                'error' => $e->getMessage()
+            ], 401);
+        }
+}
+
    public function userRegister(Request $request)
    {
         $rules = [
@@ -60,7 +107,11 @@ class UsersController extends Controller
             ],
             'password' => [
                 'required',
-                'string'
+                'string',
+                'min:8',
+                'regex:/[a-z]/',      // at least one lowercase
+                'regex:/[A-Z]/',      // at least one uppercase
+                'regex:/[0-9]/',      // at least one digit
             ],
             'role_id' => [
                 'required',
@@ -122,6 +173,7 @@ class UsersController extends Controller
                     // 'referral_code' => $user->referral_code,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
+                    'api_key' => base64_encode(Str::random(40)),
                 ]]);
         } catch (\Exception $exception) {
             return response()->json([
