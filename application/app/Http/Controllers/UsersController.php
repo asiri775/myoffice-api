@@ -40,12 +40,16 @@ class UsersController extends Controller
             'first_name' => [
                 'required',
                 'string',
-                'max:255'
+                'min:2',
+                'max:15',
+                'regex:/^[A-Za-z]{2,15}$/'
             ],
             'last_name' => [
                 'required',
                 'string',
-                'max:255'
+                'min:2',
+                'max:15',
+                'regex:/^[A-Za-z]{2,15}$/'
             ],
             'email' => [
                 'required',
@@ -67,9 +71,9 @@ class UsersController extends Controller
             'mobile_number' => [
                 'string',
             ],
-            'referral_code' => [
-                'string',
-            ]
+            // 'referral_code' => [
+            //     'string',
+            // ]
         ];
 
         $messages = [
@@ -78,6 +82,8 @@ class UsersController extends Controller
             'password.required' => __('Password is required field'),
             'first_name.required' => __('The first name is required field'),
             'last_name.required' => __('The last name is required field'),
+            'first_name.regex' => __('The first name should be between 2 and 15 characters long, and must not contain any digits or spaces.'),
+            'last_name.regex' => __('The last name should be between 2 and 15 characters long, and must not contain any digits or spaces.'),
         ];
 
         $validator = Validator::make($request->all(), $rules, $messages);
@@ -98,10 +104,25 @@ class UsersController extends Controller
                 'name' => $request->input('first_name').' '.$request->input('last_name'),
                 'super_host' => 0,
                 'country' => $request->input('country'),
-                'mobile_number' => $request->input('mobile_number'),
-                'referral_code' => $request->input('referral_code'),
+                'phone' => $request->input('mobile_number'),
+                // 'referral_code' => $request->input('referral_code'),
             ]);
-            return response()->json(['status' => 'success', "message"=>"User registered successfully", "data"=>["user"=>$user]]);
+            return response()->json([
+                'status' => 'success',
+                "message"=>"User registered successfully",
+                "data"=>[
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'email' => $user->email,
+                    'name' => $user->name,
+                    'role_id' => $user->role_id,
+                    'country' => $user->country,
+                    'mobile_number' => $user->phone,
+                    // 'referral_code' => $user->referral_code,
+                    'created_at' => $user->created_at,
+                    'updated_at' => $user->updated_at,
+                ]]);
         } catch (\Exception $exception) {
             return response()->json([
                 'status' => false,
