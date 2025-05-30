@@ -7,9 +7,40 @@ class Users extends Model implements Authenticatable
 {
    //
    use AuthenticableTrait;
-   protected $fillable = ['username','email','password'];
+   protected $fillable = [
+        'name',
+        'first_name',
+        'last_name',
+        'email',
+        'email_verified_at',
+        'password',
+        'address',
+        'address2',
+        'phone',
+        'birthday',
+        'city',
+        'state',
+        'country',
+        'zip_code',
+        'last_login_at',
+        'avatar_id',
+        'bio',
+        'business_name',
+        'map_lat',
+        'map_lng',
+        'map_zoom',
+        'instagram_link',
+        'facebook_link',
+        'site_link',
+        'super_host'
+    ];
    protected $hidden = [
-   'password'
+    'password',
+    'remember_token',
+   ];
+
+   protected $casts = [
+    'email_verified_at' => 'datetime',
    ];
    /*
    * Get Todo of User
