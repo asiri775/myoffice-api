@@ -24,12 +24,14 @@ $router->group(['prefix' => 'api/'], function ($app) {
     $app->get('space/{id}/', 'SpaceController@show');
     $app->put('space/{id}/', 'SpaceController@update');
     $app->delete('space/{id}/', 'SpaceController@destroy');
+
+    $app->post('register/','UsersController@userRegister');
  });
 
  $router->get('space/', 'SpaceController@index');
 
 $router->get('/run-cmd', function () {
-	
+
     /*Artisan::call('migrate');
     Artisan::call('make:auth');
     Artisan::call('make:controller', ['name' => 'DemoController']);
