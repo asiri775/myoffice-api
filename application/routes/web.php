@@ -18,7 +18,7 @@ $router->get('/', function () use ($router) {
 });
 
 $router->group(['prefix' => 'api/'], function ($app) {
-    $app->get('login/','UsersController@authenticate');
+    $app->post('login/','UsersController@authenticate');
     $app->post('space/','SpaceController@store');
     $app->get('space/', 'SpaceController@index');
     $app->get('space/{id}/', 'SpaceController@show');

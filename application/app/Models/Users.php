@@ -32,7 +32,8 @@ class Users extends Model implements Authenticatable
         'instagram_link',
         'facebook_link',
         'site_link',
-        'super_host'
+        'super_host',
+        'role_id'
     ];
    protected $hidden = [
     'password',
