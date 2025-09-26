@@ -7,12 +7,24 @@ class Users extends Model implements Authenticatable
 {
    //
    use AuthenticableTrait;
+
+   /**
+    * Get the name of the unique password field for the user.
+    *
+    * @return string
+    */
+   public function getAuthPasswordName()
+   {
+       return 'password';
+   }
+
    protected $fillable = [
         'name',
         'first_name',
         'last_name',
         'email',
         'email_verified_at',
+        "api_key",
         'password',
         'address',
         'address2',

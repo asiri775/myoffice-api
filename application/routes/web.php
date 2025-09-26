@@ -1,5 +1,6 @@
 <?php
 
+
 /** @var \Laravel\Lumen\Routing\Router $router */
 
 /*
@@ -26,6 +27,11 @@ $router->group(['prefix' => 'api/'], function ($app) {
     $app->delete('space/{id}/', 'SpaceController@destroy');
 
     $app->post('register/','UsersController@userRegister');
+
+
+    $app->get('oauth/{provider}/redirect', 'SocialAuthController@redirect');
+    $app->get('oauth/{provider}/callback', 'SocialAuthController@callback');
+
  });
 
  $router->get('space/', 'SpaceController@index');

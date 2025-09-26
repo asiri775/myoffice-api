@@ -95,6 +95,16 @@ $app->configure('app');
  $app->register(App\Providers\AuthServiceProvider::class);
 // $app->register(App\Providers\EventServiceProvider::class);
 
+$app->register(App\Providers\SocialAuthServiceProvider::class);
+$app->register(Laravel\Socialite\SocialiteServiceProvider::class);
+
+
+class_alias(Laravel\Socialite\Facades\Socialite::class, 'Socialite');
+
+
+$app->configure('services');
+
+
 /*
 |--------------------------------------------------------------------------
 | Load The Application Routes

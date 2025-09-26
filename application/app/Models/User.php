@@ -14,6 +14,16 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
     use Authenticatable, Authorizable, HasFactory;
 
     /**
+     * Get the name of the password field for authentication.
+     *
+     * @return string
+     */
+    public function getAuthPasswordName()
+    {
+        return 'password';
+    }
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var string[]
