@@ -18,6 +18,25 @@ $router->get('/', function () use ($router) {
     return $router->app->version();
 });
 
+
+$router->get('/mail-test', function () {
+    \Illuminate\Support\Facades\Mail::to('you@example.com')
+        ->send(new \App\Mail\DbTemplateMailable('Test Email', '<p>Hello from Lumen!</p>'));
+
+    return 'Mail triggered';
+});
+
+$router->get('/_mail-config', function () {
+    return response()->json([
+        'default' => config('mail.default'),
+        'driver'  => config('mail.driver'),              // legacy key
+        'smtp'    => config('mail.mailers.smtp') ?? null,
+        'log'     => config('mail.mailers.log') ?? null,
+        'from'    => config('mail.from'),
+    ]);
+});
+
+
 $router->group(['prefix' => 'api/'], function ($app) {
     $app->post('login/','UsersController@authenticate');
     $app->post('space/','SpaceController@store');

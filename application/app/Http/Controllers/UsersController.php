@@ -114,6 +114,21 @@ final class UsersController extends Controller
                 return $user;
             });
 
+
+            $register_as ='guest';
+
+            $mustVerify = setting_item('enable_verify_email_register_user');
+            if ($mustVerify == 1) {
+                try {
+                    $user->sendEmailUserVerificationNotification($register_as);
+                    $user->sendEmailWelcomeNotification($register_as);
+                    $user->sendEmailRegisteredNotification($register_as);
+                    // $user->sendEmailRegisteredAdminNotification($register_as);
+                } catch (\Throwable $e) {
+
+                    \Log::error('User registration email failed: '.$e->getMessage());
+                }
+            }
             return response()->json([
                 'status'  => 'success',
                 'message' => 'User registered successfully',
