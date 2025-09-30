@@ -1,4 +1,3 @@
-// application/config/services.php
 <?php
 
 return [

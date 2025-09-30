@@ -38,22 +38,32 @@ $router->get('/_mail-config', function () {
 
 
 $router->group(['prefix' => 'api/'], function ($app) {
-    $app->post('login/','UsersController@authenticate');
-    $app->post('space/','SpaceController@store');
+
+
     $app->get('space/', 'SpaceController@index');
     $app->get('space/{id}/', 'SpaceController@show');
-    $app->put('space/{id}/', 'SpaceController@update');
-    $app->delete('space/{id}/', 'SpaceController@destroy');
 
+
+
+    $app->post('login/','UsersController@authenticate');
     $app->post('register/','UsersController@userRegister');
 
 
     $app->get('oauth/{provider}/redirect', 'SocialAuthController@redirect');
     $app->get('oauth/{provider}/callback', 'SocialAuthController@callback');
 
+    // protected
+    $app->group(['middleware' => 'auth'], function($app) {
+        $app->post('space/','SpaceController@store');
+        $app->put('space/{id}/', 'SpaceController@update');
+        $app->delete('space/{id}/', 'SpaceController@destroy');
+    });
+
+
+
  });
 
- $router->get('space/', 'SpaceController@index');
+//  $router->get('space/', 'SpaceController@index');
 
 $router->get('/run-cmd', function () {
 

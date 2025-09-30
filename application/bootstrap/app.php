@@ -53,6 +53,11 @@ $app->routeMiddleware([
 ]);
 
 
+$app->middleware([
+    App\Http\Middleware\AttachTraceId::class,
+]);
+
+
 $app->router->group([
     'namespace' => 'App\Http\Controllers',
 ], function ($router) {

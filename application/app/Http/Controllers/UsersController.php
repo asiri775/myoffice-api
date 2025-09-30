@@ -4,55 +4,45 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+
+use App\Support\ApiResponse;
 use App\Models\Users;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 final class UsersController extends Controller
 {
+    use ApiResponse;
     /**
      * POST /api/login
      */
     public function authenticate(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $v = Validator::make($request->all(), [
             'email'    => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status'  => 'fail',
-                'message' => 'Validation error',
-                'errors'  => $validator->errors(),
-            ], 422);
+        if ($v->fails()) {
+            return $this->fail($v->errors()->toArray(), 'Validation error');
         }
 
-        $data = $validator->validated();
-
+        $data = $v->validated();
         $user = Users::where('email', strtolower(trim($data['email'])))->first();
 
         if (!$user || !Hash::check($data['password'], $user->password)) {
-            return response()->json([
-                'status'  => 'fail',
-                'message' => 'Invalid credentials',
-            ], 401);
+            return $this->unauthorized('Invalid credentials');
         }
 
-        // rotate api_key
         $apiKey = base64_encode(Str::random(40));
         $user->update(['api_key' => $apiKey]);
 
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Login successful',
-            'data'    => $this->userPayload($user, $apiKey),
-        ]);
+        return $this->ok($this->userPayload($user, $apiKey), 'Login successful');
     }
 
     /**
@@ -80,19 +70,17 @@ final class UsersController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation error',
-                'errors'  => $validator->errors(),
-            ], 422);
+            return $this->fail($validator->errors()->toArray(), 'Validation error');
         }
 
-        $data  = $validator->validated();
+
+
+        try {
+            $data  = $validator->validated();
         $first = trim($data['first_name']);
         $last  = trim($data['last_name']);
         $email = strtolower(trim($data['email']));
         $name  = $first.' '.$last;
-
-        try {
             $user = DB::transaction(function () use ($data, $first, $last, $name, $email) {
                 $apiKey = base64_encode(Str::random(40));
 
@@ -129,11 +117,10 @@ final class UsersController extends Controller
                     \Log::error('User registration email failed: '.$e->getMessage());
                 }
             }
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'User registered successfully',
-                'data'    => $this->userPayload($user, $user->fresh_api_key),
-            ], 201);
+            return $this->created(
+                $this->userPayload($user, $user->fresh_api_key),
+                'User registered successfully'
+            );
 
         } catch (\Throwable $e) {
             return response()->json([

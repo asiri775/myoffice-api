@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Users;
 use App\Models\UserMeta;
+use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -13,22 +14,31 @@ use Laravel\Socialite\Facades\Socialite;
 
 final class SocialAuthController extends Controller
 {
+    use ApiResponse;
+
     private array $allowed = ['google','facebook'];
 
+    /** GET /api/auth/{provider}/redirect */
     public function redirect(string $provider): JsonResponse
     {
-        if (!in_array($provider, $this->allowed, true)) {
-            return response()->json(['status'=>'fail','message'=>'Provider not supported'], 422);
+        if (!$this->isAllowed($provider)) {
+            return $this->fail(['provider' => ['Provider not supported']], 'Validation error', 422);
         }
-        $url = Socialite::driver($provider)->stateless()->redirect()->getTargetUrl();
 
-        return response()->json(['status'=>'success','message'=>'Auth URL','data'=>['url'=>$url]]);
+        try {
+            $url = Socialite::driver($provider)->stateless()->redirect()->getTargetUrl();
+            return $this->ok(['url' => $url], 'Auth URL');
+        } catch (\Throwable $e) {
+            $msg = app()->environment('production') ? 'Unable to start social login' : $e->getMessage();
+            return $this->serverError($msg);
+        }
     }
 
+    /** GET /api/auth/{provider}/callback */
     public function callback(Request $request, string $provider): JsonResponse
     {
-        if (!in_array($provider, $this->allowed, true)) {
-            return response()->json(['status'=>'fail','message'=>'Provider not supported'], 422);
+        if (!$this->isAllowed($provider)) {
+            return $this->fail(['provider' => ['Provider not supported']], 'Validation error', 422);
         }
 
         try {
@@ -40,38 +50,34 @@ final class SocialAuthController extends Controller
             $last  = trim($social->user['family_name'] ?? ($social->offsetGet('last_name') ?? ''));
 
             if (!$first || !$last) {
-                if ($name) { [$first, $last] = array_pad(explode(' ', $name, 2), 2, ''); }
+                if ($name) {
+                    [$first, $last] = array_pad(explode(' ', $name, 2), 2, '');
+                }
             }
+
             if (!$email) {
-                return response()->json([
-                    'status'=>'fail',
-                    'message'=>'Email permission is required on your social account',
-                ], 400);
+                return $this->fail(['email' => ['Email permission is required on your social account']], 'Validation error', 400);
             }
 
             // Map provider -> meta keys
-            $idKey     = $provider === 'google'   ? 'social_google_id'    : 'social_facebook_id';
-            $emailKey  = $provider === 'google'   ? 'social_google_email' : 'social_facebook_email';
-            $nameKey   = $provider === 'google'   ? 'social_google_name'  : 'social_facebook_name';
-            $avatarKey = $provider === 'google'   ? 'social_google_avatar': 'social_facebook_avatar';
+            [$idKey, $emailKey, $nameKey, $avatarKey] = $provider === 'google'
+                ? ['social_google_id','social_google_email','social_google_name','social_google_avatar']
+                : ['social_facebook_id','social_facebook_email','social_facebook_name','social_facebook_avatar'];
 
-            // 1) Try match existing user by provider id in user_meta
-            $link = UserMeta::where('name', $idKey)
-                ->where('val', $social->getId())
-                ->first();
-
+            // 1) Try existing link by provider id
+            $link = UserMeta::where('name', $idKey)->where('val', (string) $social->getId())->first();
             $user = $link?->user;
 
-            // 2) Else try by email on users
+            // 2) Else by email
             if (!$user) {
                 $user = Users::where('email', $email)->first();
             }
 
-            // 3) Create new or rotate api_key for existing
+            // 3) Create or rotate api_key
             $newApiKey = base64_encode(Str::random(40));
+            $created   = false;
+
             if (!$user) {
-                // Note: your Users model doesn't have 'api_key' in $fillable by default.
-                // If it's not fillable, we use forceFill().
                 $user = new Users([
                     'first_name' => $first ?: ($name ?: 'User'),
                     'last_name'  => $last ?: '',
@@ -81,48 +87,58 @@ final class SocialAuthController extends Controller
                     'role_id'    => 3,
                     'super_host' => 0,
                 ]);
-
-                // api_key may not be mass-assignable
                 $user->forceFill(['api_key' => $newApiKey])->save();
+                $created = true;
             } else {
                 $user->forceFill(['api_key' => $newApiKey])->save();
             }
 
             // 4) Upsert meta linkage
             UserMeta::upsertPairs($user->id, [
-                $idKey     => (string) $social->getId(),
-                $emailKey  => $email,
-                $nameKey   => $name ?: trim(($first ?: '') . ' ' . ($last ?: '')),
-                $avatarKey => (string) $social->getAvatar(),
-                // In your dump there is also 'social_meta_avatar' mirroring the provider avatar:
-                'social_meta_avatar' => (string) $social->getAvatar(),
+                $idKey                  => (string) $social->getId(),
+                $emailKey               => $email,
+                $nameKey                => $name ?: trim(($first ?: '') . ' ' . ($last ?: '')),
+                $avatarKey              => (string) $social->getAvatar(),
+                'social_meta_avatar'    => (string) $social->getAvatar(),
             ]);
 
-            // 5) Respond with your standard payload
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Login successful',
-                'data'    => [
-                    'id'            => $user->id,
-                    'first_name'    => $user->first_name,
-                    'last_name'     => $user->last_name,
-                    'name'          => $user->name,
-                    'email'         => $user->email,
-                    'role_id'       => $user->role_id,
-                    'country'       => $user->country,
-                    'mobile_number' => $user->phone,
-                    'avatar'        => UserMeta::getValue($user->id, $avatarKey),
-                    'api_key'       => $user->api_key,
-                    'created_at'    => $user->created_at,
-                    'updated_at'    => $user->updated_at,
-                ],
-            ]);
+            // 5) Respond using standard shape
+            $payload = $this->userPayload($user, $user->api_key, UserMeta::getValue($user->id, $avatarKey));
+
+            return $created
+                ? $this->created($payload, 'Account created via '.$provider)
+                : $this->ok($payload, 'Login successful');
 
         } catch (\Throwable $e) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => config('app.debug') ? $e->getMessage() : 'Unable to authenticate with '.$provider,
-            ], 500);
+            $msg = app()->environment('production')
+                ? 'Unable to authenticate with '.$provider
+                : $e->getMessage();
+            return $this->serverError($msg);
         }
+    }
+
+    /* ---------------- helpers ---------------- */
+
+    private function isAllowed(string $provider): bool
+    {
+        return in_array($provider, $this->allowed, true);
+    }
+
+    private function userPayload(Users $user, string $apiKey, ?string $avatar): array
+    {
+        return [
+            'id'            => $user->id,
+            'first_name'    => $user->first_name,
+            'last_name'     => $user->last_name,
+            'name'          => $user->name,
+            'email'         => $user->email,
+            'role_id'       => $user->role_id,
+            'country'       => $user->country,
+            'mobile_number' => $user->phone,
+            'avatar'        => $avatar,
+            'api_key'       => $apiKey,
+            'created_at'    => $user->created_at,
+            'updated_at'    => $user->updated_at,
+        ];
     }
 }
