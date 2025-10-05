@@ -1,5 +1,6 @@
 <?php
 namespace App\Http\Controllers;
+use App\Models\AddToFavourite;
 use App\Models\Booking;
 use App\Models\Review;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
 
 use Auth;
+use Validator;
 class SpaceController extends Controller
 {
     /**
@@ -34,7 +36,64 @@ class SpaceController extends Controller
      * @return \Illuminate\Http\Response
      */
 
-     public function index(Request $request)
+     public function addRemoveFavourite(Request $request)
+        {
+
+            $user = Auth::user();
+            if (!$user) {
+                return $this->unauthorized('Unauthorized: user not found or token invalid');
+            }
+
+
+            $v = Validator::make($request->all(), [
+                'space_id' => ['required', 'integer', 'min:1'],
+            ]);
+
+            if ($v->fails()) {
+                return $this->fail($v->errors()->toArray(), 'Validation error'); // 422
+            }
+
+            $spaceId = (int) $v->validated()['space_id'];
+
+
+            $space = Space::find($spaceId);
+            if (!$space) {
+                return $this->notFound('Space not found'); // 404
+            }
+
+            try {
+                return DB::transaction(function () use ($user, $spaceId) {
+                    $existing = AddToFavourite::where('user_id', $user->id)
+                        ->where('object_id', $spaceId)
+                        ->first();
+
+                    if ($existing) {
+                        $existing->delete();
+
+                        return $this->ok(
+                            ['space_id' => $spaceId, 'favourited' => false],
+                            'Removed from favourites successfully'
+                        );
+                    }
+
+                    AddToFavourite::create([
+                        'user_id'   => $user->id,
+                        'object_id' => $spaceId,
+                    ]);
+
+                    return $this->ok(
+                        ['space_id' => $spaceId, 'favourited' => true],
+                        'Added to favourites successfully'
+                    );
+                });
+            } catch (\Throwable $e) {
+
+                $err = app()->environment('local') || config('app.debug') ? $e->getMessage() : null;
+                return $this->serverError('Unable to update favourites', $err);
+            }
+        }
+
+     public function index(Request $request): JsonResponse
      {
          // sanitize & defaults
          $limit   = max(0, (int) $request->input('limit', 10)); // 0 => no limit
@@ -461,4 +520,7 @@ class SpaceController extends Controller
       }
       return $out;
   }
+
+
+
 }

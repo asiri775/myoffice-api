@@ -42,6 +42,8 @@ $app->alias('mailer', Illuminate\Mail\Mailer::class);
 $app->register(App\Providers\AppServiceProvider::class);
 $app->register(App\Providers\AuthServiceProvider::class);
 
+
+
 $app->register(App\Providers\SocialAuthServiceProvider::class);
 $app->register(Laravel\Socialite\SocialiteServiceProvider::class);
 class_alias(Laravel\Socialite\Facades\Socialite::class, 'Socialite');

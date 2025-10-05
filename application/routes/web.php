@@ -49,14 +49,19 @@ $router->group(['prefix' => 'api/'], function ($app) {
     $app->post('register/','UsersController@userRegister');
 
 
+
+    $app->post('bookings/verify-times','BookingController@verifySelectedTimes');
+
     $app->get('oauth/{provider}/redirect', 'SocialAuthController@redirect');
     $app->get('oauth/{provider}/callback', 'SocialAuthController@callback');
 
     // protected
     $app->group(['middleware' => 'auth'], function($app) {
+        $app->post('space/add-remove-favourite','SpaceController@addRemoveFavourite');
         $app->post('space/','SpaceController@store');
         $app->put('space/{id}/', 'SpaceController@update');
         $app->delete('space/{id}/', 'SpaceController@destroy');
+
     });
 
 
