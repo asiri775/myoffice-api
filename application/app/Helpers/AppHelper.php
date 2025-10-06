@@ -14,3 +14,4 @@ function setting_item($item, $default = '', $isArray = false)
     return $res;
 
 }
+

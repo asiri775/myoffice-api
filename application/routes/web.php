@@ -50,7 +50,10 @@ $router->group(['prefix' => 'api/'], function ($app) {
 
 
 
-    $app->post('bookings/verify-times','BookingController@verifySelectedTimes');
+    $app->post('bookings/verify-times','AvailabilityController@verifySelectedTimes');
+    $app->post('bookings/available-dates','AvailabilityController@availableDates');
+
+    $app->post('bookings/add-to-cart','BookingController@addToCart');
 
     $app->get('oauth/{provider}/redirect', 'SocialAuthController@redirect');
     $app->get('oauth/{provider}/callback', 'SocialAuthController@callback');

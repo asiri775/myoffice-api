@@ -14,3 +14,15 @@ if (! function_exists('setting_item')) {
         return $res;
     }
 }
+
+if (!function_exists('get_bookable_services')) {
+    function get_bookable_services(): array {
+        return [
+            'space' => \App\Models\Space::class,
+            'car'   => \App\Models\Car::class,
+            'hotel' => \App\Models\Hotel::class,
+            'event' => \App\Models\Event::class,
+            'flight'=> \App\Models\Flight::class,
+        ];
+    }
+}

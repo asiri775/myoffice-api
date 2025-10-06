@@ -3,214 +3,336 @@ declare(strict_types=1);
 
 namespace App\Helpers;
 
-use DateTime;
-use DateTimeZone;
+use Carbon\Carbon;
+
 
 final class BookingHelper
 {
-    /**
-     * Input: Y-m-d H:i:s
-     */
-    public static function getHoursBetweenDates(string $start, string $end): float
+    /** Parse m/d/Y → Y-m-d (string|false) */
+    public static function parseUsDate(?string $mdY)
     {
-        return round((strtotime($end) - strtotime($start)) / 3600, 1);
-    }
-
-    /**
-     * Returns: "$1,234.00" or '-' if null (unless $zeroIfNull = true)
-     */
-    public static function formatPrice($value, bool $zeroIfNull = false): string
-    {
-        if (!self::checkIfNumValNotNull($value)) {
-            return $zeroIfNull ? '$0.00' : '-';
+        if (!$mdY) return false;
+        try {
+            return Carbon::createFromFormat('m/d/Y', $mdY)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return false;
         }
-        return '$' . number_format((float) $value, 2);
     }
 
-    /** Core pricing logic (your code, compacted and guarded) */
-    public static function getSpacePrice($space, string $from, string $to, ?int $bookingId = null): array
+    /** Normalize to a valid PHP timezone or fallback to UTC */
+    public static function resolveTimezone(?string $tz): string
+    {
+        return in_array($tz, \DateTimeZone::listIdentifiers(), true) ? $tz : 'UTC';
+    }
+
+    /** Diff in whole hours (ceil by minute > 0) */
+    public static function getHoursBetweenDates(string $start, string $end): int
+    {
+        $s = Carbon::parse($start);
+        $e = Carbon::parse($end);
+        $mins = $s->diffInMinutes($e);
+        // treat partial hour as full hour for billing
+        return (int) ceil($mins / 60);
+    }
+
+    /** Currency formatting (customize as you like) */
+    public static function formatPrice(float $amount, string $currency = '$'): string
+    {
+        return $currency . number_format($amount, 2);
+    }
+
+    
+    public static function getSpacePrice($space, $from, $to, $bookingId = null)
     {
         $items = [];
         $price = 0;
 
-        if (!$space || !$from || !$to) {
-            return self::emptyPrice();
+        if ($space == null) {
+            // empty shell with zeros (same shape as before)
+            return [
+                'items' => [],
+                'extraFeeList' => [],
+                'guestFeeList' => [],
+                'hostFeeList' => [],
+                'timeInfo' => ['hours' => 0,'days' => 0,'weeks' => 0,'months' => 0],
+                'price' => 0,
+                'extraFee' => 0,
+                'priceAfterExtraFee' => 0,
+                'guestFee' => 0,
+                'priceAfterGuestFee' => 0,
+                'tax' => 0,
+                'priceAfterTax' => 0,
+                'couponType' => 0,
+                'discount' => 0,
+                'payableAmount' => 0,
+                'hostFee' => 0,
+                'adminAmount' => 0,
+                'hostAmount' => 0,
+                'rentalTotal' => 0,
+                'subTotal' => 0,
+                'total' => 0,
+                'grandTotal' => 0,
+            ];
         }
 
-        $start = new DateTime($from);
-        $start->modify('-1 seconds');
+        // ---------- TIME BREAKDOWN ----------
+        // total hours (ceil minutes to next hour so 10:00:01→17:00:00 next day = 31)
+        $totalMinutes = max(0, (strtotime($to) - strtotime($from)));
+        $totalHours   = (int) ceil($totalMinutes / 60);
 
-        $end = new DateTime($to);
-        $end->modify('+1 seconds');
+        // "billing day" = how many hours count as one billable day
+        // set this to 10 on spaces where you want 10h/day behavior
+        $billingDay = (int) trim($space->hours_after_full_day ?? 24);
+        if ($billingDay <= 0) $billingDay = 24;
 
-        $difference = $start->diff($end, true);
+        // month = 28 calendar days; week = 7 calendar days
+        $HOURS_PER_WEEK  = 7 * 24;
+        $HOURS_PER_MONTH = 28 * 24;
 
-        $totalDays  = $difference->days;
-        $totalHours = $difference->h + $difference->days * 24;
-
-        // 28-day month logic
-        $months = (int) floor($totalDays / 28);
-        $weeks  = (int) floor(($totalDays % 28) / 7);
-        $days   = (int) ($totalDays % 7);
-        $hours  = (int) $difference->h;
-        $minutes = (int) $difference->i;
-
-        if ($minutes > 0) $hours++;
-
-        $maxHoursPerDay = (int) (trim((string) $space->hours_after_full_day) ?: 24);
-        if ($hours > $maxHoursPerDay) {
-            $hours = 0;
-            $days++;
-        }
-
-        // NOTE: your original code had extra increments; keeping pricing faithful without +1 side effects.
-        $listingPrice = self::getNumValueOrDefault($space->sale_price, $space->price);
+        // ---------- RATES (prefer discounted, fallback to base) ----------
         $monthlyPrice = self::getNumValueOrDefault($space->discounted_monthly, $space->monthly);
+        $weekPrice    = self::getNumValueOrDefault($space->discounted_weekly,  $space->weekly);
         $dayPrice     = self::getNumValueOrDefault($space->discounted_daily,   $space->daily);
         $hourPrice    = self::getNumValueOrDefault($space->discounted_hourly,  $space->hourly);
-        $weekPrice    = self::getNumValueOrDefault($space->discounted_weekly,  $space->weekly);
 
-        $totalMonthPrice = $totalDayPrice = $totalHourPrice = $totalWeekPrice = $otherPrice = 0;
+        // If nothing is set, fall back to listing price as a day rate
+        if (!self::checkIfNumValNotNull($monthlyPrice) &&
+            !self::checkIfNumValNotNull($weekPrice) &&
+            !self::checkIfNumValNotNull($dayPrice) &&
+            !self::checkIfNumValNotNull($hourPrice)) {
+            $listingPrice = self::getNumValueOrDefault($space->sale_price, $space->price);
+            $dayPrice = $listingPrice;
+        }
 
-        if (
-            self::checkIfNumValNotNull($monthlyPrice) &&
-            self::checkIfNumValNotNull($dayPrice) &&
-            self::checkIfNumValNotNull($hourPrice) &&
-            self::checkIfNumValNotNull($weekPrice)
-        ) {
-            if ($months > 0) {
-                $totalMonthPrice = $months * $monthlyPrice;
-                $items[] = ['type' => 'months', 'quantity' => $months, 'rate' => $monthlyPrice, 'total' => $totalMonthPrice];
+        // ---------- GREEDY BREAKDOWN ----------
+        // months & weeks are in *calendar* hours; days are in *billingDay* hours.
+        $rem = $totalHours;
+
+        $months = 0; $weeks = 0; $days = 0; $hours = 0;
+
+        if (self::checkIfNumValNotNull($monthlyPrice) && $rem >= $HOURS_PER_MONTH) {
+            $months = intdiv($rem, $HOURS_PER_MONTH);
+            $rem   -= $months * $HOURS_PER_MONTH;
+            $items[] = ['type'=>'months','quantity'=>$months,'rate'=>$monthlyPrice,'total'=>$months * $monthlyPrice];
+        }
+
+        if (self::checkIfNumValNotNull($weekPrice) && $rem >= $HOURS_PER_WEEK) {
+            $weeks = intdiv($rem, $HOURS_PER_WEEK);
+            $rem  -= $weeks * $HOURS_PER_WEEK;
+            $items[] = ['type'=>'weeks','quantity'=>$weeks,'rate'=>$weekPrice,'total'=>$weeks * $weekPrice];
+        }
+
+        if (self::checkIfNumValNotNull($dayPrice) && $rem >= $billingDay) {
+            $days = intdiv($rem, $billingDay);
+            $rem -= $days * $billingDay;
+            $items[] = ['type'=>'days','quantity'=>$days,'rate'=>$dayPrice,'total'=>$days * $dayPrice];
+        }
+
+        // remainder in hours — if no hourly price, bump one more day if available
+        if ($rem > 0) {
+            if (self::checkIfNumValNotNull($hourPrice)) {
+                $hours = $rem;
+                $items[] = ['type'=>'hours','quantity'=>$hours,'rate'=>$hourPrice,'total'=>$hours * $hourPrice];
+                $rem = 0;
+            } elseif (self::checkIfNumValNotNull($dayPrice)) {
+                $days += 1;
+                // merge with last days line if present
+                $merged = false;
+                if (!empty($items) && end($items)['type']==='days') {
+                    $idx = count($items)-1;
+                    $items[$idx]['quantity'] += 1;
+                    $items[$idx]['total']     = $items[$idx]['quantity'] * $dayPrice;
+                    $merged = true;
+                }
+                if (!$merged) {
+                    $items[] = ['type'=>'days','quantity'=>1,'rate'=>$dayPrice,'total'=>$dayPrice];
+                }
+                $rem = 0;
             }
-            if ($days > 0) {
-                $totalDayPrice = $days * $dayPrice;
-                $items[] = ['type' => 'days', 'quantity' => $days, 'rate' => $dayPrice, 'total' => $totalDayPrice];
+        }
+
+        // Guard: if no items got added (e.g., no rates), return zeros
+        if (empty($items)) {
+            return [
+                'items' => [],
+                'extraFeeList' => [],
+                'guestFeeList' => [],
+                'hostFeeList' => [],
+                'timeInfo' => ['hours' => 0,'days' => 0,'weeks' => 0,'months' => 0],
+                'price' => 0,
+                'extraFee' => 0,
+                'priceAfterExtraFee' => 0,
+                'guestFee' => 0,
+                'priceAfterGuestFee' => 0,
+                'tax' => 0,
+                'priceAfterTax' => 0,
+                'couponType' => 0,
+                'discount' => 0,
+                'payableAmount' => 0,
+                'hostFee' => 0,
+                'adminAmount' => 0,
+                'hostAmount' => 0,
+                'rentalTotal' => 0,
+                'subTotal' => 0,
+                'total' => 0,
+                'grandTotal' => 0,
+            ];
+        }
+
+        // ---------- BASE RENTAL TOTAL ----------
+        $price = array_reduce($items, fn($s,$i)=>$s + ($i['total'] ?? 0), 0.0);
+
+        // ---------- FEES (keep your current logic) ----------
+        $extraFee = 0;
+        $extraFeeList = [];
+        $guestFee = 0;
+        $guestFeeList = [];
+        $hostFee  = 0;
+        $hostFeeList = [];
+
+        // Extra prices configured on space
+        $totalDaysForExtras  = $months*28*1 + $weeks*7 + $days; // extras usually use calendar days
+        $totalHoursForExtras = $totalHours;
+
+        $extraPrices = $space->extra_price;
+        if (is_array($extraPrices) && count($extraPrices) > 0) {
+            foreach ($extraPrices as $extraPriceItem) {
+                $row = 0;
+                switch ($extraPriceItem['type']) {
+                    case 'one_time':
+                        if ($extraPriceItem['price'] != null) $row = $extraPriceItem['price'];
+                        break;
+                    case 'per_hour':
+                        if ($extraPriceItem['price'] != null) $row = ($totalHoursForExtras * $extraPriceItem['price']);
+                        break;
+                    case 'per_day':
+                        if ($extraPriceItem['price'] != null) $row = ($totalDaysForExtras * $extraPriceItem['price']);
+                        break;
+                }
+                $extraFee += $row;
+                $tmp = $extraPriceItem;
+                $tmp['totalAmount'] = $row;
+                $extraFeeList[] = $tmp;
             }
-            if ($hours > 0) {
-                $totalHourPrice = $hours * $hourPrice;
-                $items[] = ['type' => 'hours', 'quantity' => $hours, 'rate' => $hourPrice, 'total' => $totalHourPrice];
+        }
+
+        $priceAfterExtraFee = $price + $extraFee;
+
+        // Guest fees (buyer)
+        $guestFees = json_decode(setting_item('space_booking_buyer_fees'), true);
+        if (is_array($guestFees) && count($guestFees) > 0) {
+            foreach ($guestFees as $gf) {
+                $row = 0;
+                if (($gf['unit'] ?? '') === 'fixed') {
+                    $row = ($gf['price'] ?? 0) * 1;
+                } elseif (($gf['unit'] ?? '') === 'percent') {
+                    $row = (($gf['price'] ?? 0) * $priceAfterExtraFee) / 100;
+                }
+                $guestFee += $row;
+                $info = $gf;
+                $info['totalAmount'] = $row;
+                $guestFeeList[] = $info;
             }
-            if ($weeks > 0) {
-                $totalWeekPrice = $weeks * $weekPrice;
-                $items[] = ['type' => 'weeks', 'quantity' => $weeks, 'rate' => $weekPrice, 'total' => $totalWeekPrice];
+        }
+
+        $priceAfterGuestFee = $priceAfterExtraFee + $guestFee;
+
+        // Tax
+        $tax = ($priceAfterGuestFee * Constants::TAX_PERCENT);
+        $priceAfterTax = $priceAfterGuestFee + $tax;
+
+        // Host fee (seller) – on priceAfterExtraFee
+        $hostFees = json_decode(setting_item('space_booking_seller_fees'), true);
+        if (is_array($hostFees) && count($hostFees) > 0) {
+            foreach ($hostFees as $hf) {
+                $row = 0;
+                if (($hf['unit'] ?? '') === 'fixed') {
+                    $row = ($hf['price'] ?? 0) * 1;
+                } elseif (($hf['unit'] ?? '') === 'percent') {
+                    $row = (($hf['price'] ?? 0) * $priceAfterExtraFee) / 100;
+                }
+                $hostFee += $row;
+                $info = $hf;
+                $info['totalAmount'] = $row;
+                $hostFeeList[] = $info;
             }
+        }
+
+        // Coupons (unchanged)
+        $coupon_type = "global";
+        $discount = 0;
+        if ($bookingId != null) {
+            $bookingCoupons = \Modules\Coupon\Models\CouponBookings::where('booking_id', $bookingId)->get();
+            if ($bookingCoupons != null) {
+                foreach ($bookingCoupons as $bookingCoupon) {
+                    $couponData = ($bookingCoupon['coupon_data']);
+                    if ($couponData['object_id'] != null) $coupon_type = "space";
+                    $off = 0;
+                    if ($couponData['discount_type'] == "fixed") {
+                        $off = $couponData['amount'];
+                    } elseif ($couponData['discount_type'] == "percent") {
+                        $off = ($priceAfterExtraFee * $couponData['amount']) / 100;
+                    }
+                    $bookingCoupon->coupon_amount = $off;
+                    $bookingCoupon->save();
+                    $discount += $off;
+                }
+            }
+        }
+
+        $payableAmount = $priceAfterTax; // before discount
+        $adminAmount   = $hostFee + $tax + $guestFee;
+        $hostAmount    = $payableAmount - $adminAmount;
+
+        if ($discount > $payableAmount) $discount = $payableAmount;
+        $payableAmount = $payableAmount - $discount;
+
+        if ($coupon_type == "global") {
+            $adminAmount -= $discount;
         } else {
-            // fallback: per-day listing price
-            $diffSeconds = abs(strtotime($to) - strtotime($from));
-            $daysDiff = max(1, (int) ceil($diffSeconds / 86400));
-            $otherPrice = $daysDiff * $listingPrice;
-            $items[] = ['type' => 'days', 'quantity' => $daysDiff, 'rate' => $listingPrice, 'total' => $otherPrice];
+            $hostAmount  -= $discount;
         }
 
-        $price = $totalMonthPrice + $totalDayPrice + $totalHourPrice + $totalWeekPrice + $otherPrice;
-
-        // caps: hour→day, day→week, week→month
-        if ($days === 0 && $hours > 0 && $weeks === 0 && $months === 0) {
-            $price = min($price, $dayPrice ?: $price);
-        } elseif ($weeks === 0 && $days > 0 && $months === 0) {
-            $price = min($price, $weekPrice ?: $price);
-        } elseif ($months === 0 && $weeks > 0) {
-            $price = min($price, $monthlyPrice ?: $price);
-        }
-
+        // Summary fields (same as your original keys, but **no HTML**)
         $priceDetails = [
-            'items'          => $items,
-            'extraFeeList'   => [],
-            'guestFeeList'   => [],
-            'hostFeeList'    => [],
-            'timeInfo'       => ['hours' => $hours, 'days' => $days, 'weeks' => $weeks, 'months' => $months],
-            'price'          => $price,
-            'extraFee'       => 0,
-            'priceAfterExtraFee' => $price,
-            'guestFee'       => 0,
-            'priceAfterGuestFee' => $price,
-            'tax'            => 0,
-            'priceAfterTax'  => $price,
-            'couponType'     => 0,
-            'discount'       => 0,
-            'payableAmount'  => $price,
-            'hostFee'        => 0,
-            'adminAmount'    => 0,
-            'hostAmount'     => 0,
-            // aggregates used by your views
-            'rentalTotal'    => $price,
-            'subTotal'       => $price,
-            'total'          => $price,
-            'grandTotal'     => $price,
+            'items' => $items,
+            'extraFeeList' => $extraFeeList,
+            'guestFeeList' => $guestFeeList,
+            'hostFeeList' => $hostFeeList,
+            'timeInfo' => [
+                'hours'  => $hours,
+                'days'   => $days,
+                'weeks'  => $weeks,
+                'months' => $months,
+            ],
+            'price' => $price,                          // rental base
+            'extraFee' => $extraFee,
+            'priceAfterExtraFee' => $priceAfterExtraFee,
+            'guestFee' => $guestFee,
+            'priceAfterGuestFee' => $priceAfterGuestFee,
+            'tax' => $tax,
+            'priceAfterTax' => $priceAfterTax,
+            'couponType' => $coupon_type === 'global' ? 0 : 1,
+            'discount' => $discount,
+            'payableAmount' => $payableAmount,
+            'hostFee' => $hostFee,
+            'adminAmount' => $adminAmount,
+            'hostAmount' => $hostAmount,
         ];
 
-        // Note: I’ve omitted fees/coupons rendering & Blade view rendering to keep helper framework-agnostic.
-        // You can add them back here if you need HTML snippets in the API.
+        // Convenience totals (kept for compatibility)
+        $priceDetails['rentalTotal'] = $priceDetails['price'] + $priceDetails['extraFee'];
+        $priceDetails['subTotal']    = $priceDetails['rentalTotal'] + $priceDetails['guestFee'];
+        $priceDetails['total']       = $priceDetails['subTotal'] + $priceDetails['tax'];
+        $priceDetails['grandTotal']  = $priceDetails['total'] - $priceDetails['discount'];
 
         return $priceDetails;
     }
 
-    /* ------------- small internals ------------- */
-
-    public static function getNumValueOrDefault($prefer, $fallback)
+    /** Cast numeric or return 0 */
+    private static function num($v): float
     {
-        if (self::checkIfNumValNotNull($prefer)) return (float) $prefer;
-        if (self::checkIfNumValNotNull($fallback)) return (float) $fallback;
-        return null;
-    }
-
-    public static function checkIfNumValNotNull($v): bool
-    {
-        return $v !== null && $v !== '' && is_numeric($v);
-    }
-
-    private static function emptyPrice(): array
-    {
-        return [
-            'items' => [],
-            'extraFeeList' => [],
-            'guestFeeList' => [],
-            'hostFeeList' => [],
-            'timeInfo' => ['hours' => 0, 'days' => 0, 'weeks' => 0, 'months' => 0],
-            'price' => 0,
-            'extraFee' => 0,
-            'priceAfterExtraFee' => 0,
-            'guestFee' => 0,
-            'priceAfterGuestFee' => 0,
-            'tax' => 0,
-            'priceAfterTax' => 0,
-            'couponType' => 0,
-            'discount' => 0,
-            'payableAmount' => 0,
-            'hostFee' => 0,
-            'adminAmount' => 0,
-            'hostAmount' => 0,
-            'rentalTotal' => 0,
-            'subTotal' => 0,
-            'total' => 0,
-            'grandTotal' => 0,
-        ];
-    }
-
-    /** m/d/Y → Y-m-d, returns null if invalid */
-    public static function parseUsDate(?string $mdy): ?string
-    {
-        if (!$mdy) return null;
-        $parts = explode('/', $mdy);
-        if (count($parts) !== 3) return null;
-        [$m, $d, $y] = $parts;
-        if (!checkdate((int)$m, (int)$d, (int)$y)) return null;
-        return sprintf('%04d-%02d-%02d', (int)$y, (int)$m, (int)$d);
-    }
-
-    /** Safe TZ fallback chain */
-    public static function resolveTimezone(?string $tz): string
-    {
-        // ensure valid PHP timezone
-        if ($tz && in_array($tz, DateTimeZone::listIdentifiers(), true)) {
-            return $tz;
-        }
-        // region fallbacks
-        foreach (['America/Toronto', 'America/New_York', 'UTC'] as $cand) {
-            if (in_array($cand, DateTimeZone::listIdentifiers(), true)) {
-                return $cand;
-            }
-        }
-        return 'UTC';
+        if ($v === null || $v === '' || !is_numeric($v)) return 0.0;
+        return (float) $v;
     }
 }
