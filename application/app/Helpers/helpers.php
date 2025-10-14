@@ -26,3 +26,48 @@ if (!function_exists('get_bookable_services')) {
         ];
     }
 }
+
+
+
+if (!function_exists('random_code')) {
+    /**
+     * Simple secure random uppercase string, default 10 chars.
+     */
+    function random_code(int $length = 10): string
+    {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // skip confusing chars
+        $max = strlen($alphabet) - 1;
+        $out = '';
+        for ($i = 0; $i < $length; $i++) {
+            $out .= $alphabet[random_int(0, $max)];
+        }
+        return $out;
+    }
+
+
+
+if (!function_exists('format_price')) {
+    function format_price($value, $zeroIfNull = false)
+    {
+        if ($value === null || $value === '') {
+            if ($zeroIfNull) {
+                $value = 0;
+            } else {
+                return '-';
+            }
+        }
+        return '$' . number_format((float)$value, 2);
+    }
+}
+
+if (!function_exists('format_number')) {
+    function format_number($value, $zeroIfNull = false)
+    {
+        if ($value === null || $value === '') {
+            return $zeroIfNull ? 0 : '-';
+        }
+        return $value;
+    }
+}
+
+}

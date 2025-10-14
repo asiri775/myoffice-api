@@ -13,7 +13,8 @@
         "illuminate/mail": "^10.0",
         "laravel/helpers": "^1.8",
         "laravel/lumen-framework": "^10.0",
-        "laravel/socialite": "^5.23"
+        "laravel/socialite": "^5.23",
+        "phpmailer/phpmailer": "^6.11"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",

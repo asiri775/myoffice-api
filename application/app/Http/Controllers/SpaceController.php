@@ -93,7 +93,7 @@ class SpaceController extends Controller
             }
         }
 
-     public function index(Request $request): JsonResponse
+     public function index(Request $request)
      {
          // sanitize & defaults
          $limit   = max(0, (int) $request->input('limit', 10)); // 0 => no limit

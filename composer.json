@@ -1,6 +1,7 @@
 {
     "require": {
         "laravel/socialite": "^5.23",
-        "laravel/sanctum": "^4.2"
+        "laravel/sanctum": "^4.2",
+        "phpmailer/phpmailer": "^6.11"
     }
 }
