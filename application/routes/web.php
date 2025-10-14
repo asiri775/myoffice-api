@@ -55,6 +55,8 @@ $router->group(['prefix' => 'api/'], function ($app) {
 
     $app->post('bookings/add-to-cart','BookingController@addToCart');
 
+    $app->post('bookings/coupon','CouponController@apply');
+
     $app->get('oauth/{provider}/redirect', 'SocialAuthController@redirect');
     $app->get('oauth/{provider}/callback', 'SocialAuthController@callback');
 
@@ -64,6 +66,18 @@ $router->group(['prefix' => 'api/'], function ($app) {
         $app->post('space/','SpaceController@store');
         $app->put('space/{id}/', 'SpaceController@update');
         $app->delete('space/{id}/', 'SpaceController@destroy');
+
+        $app->post('bookings/search','BookingSearchController@search');
+
+        $app->post('bookings/reschedule','BookingController@reschedule');
+        $app->post('bookings/invoice','BookingController@invoice');
+        $app->post('bookings/contact-host','BookingController@contactHost');
+        $app->post('bookings/cancel','BookingController@cancelBooking');
+        $app->post('bookings/verify-times','BookingController@verifySelectedTimes');
+        $app->post('bookings/status-change','BookingController@statusChange');
+        $app->post('bookings/{id}','BookingController@show');
+
+
 
     });
 
