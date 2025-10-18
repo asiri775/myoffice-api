@@ -10,6 +10,8 @@ use App\Models\Payment;
 use App\Models\Space;
 use App\Models\SpaceTerm;
 use App\Models\User;
+use App\Models\Users;
+use App\PaymentGateways\TwoCheckoutGateway;
 use App\Support\ApiResponse;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +28,253 @@ final class BookingController extends Controller
      * POST /api/bookings/add-to-cart
 
      */
+
+     public function checkout(Request $request)  {
+        $v = Validator::make($request->all(), [
+            'code'            => ['required','string'],
+            'first_name'      => ['required','string','max:255'],
+            'last_name'       => ['required','string','max:255'],
+            'email'           => ['required','string','email','max:255'],
+            'phone'           => ['required','string','max:255'],
+            'country'         => ['required','string'],
+            'term_conditions' => ['required'],              // boolean-ish from client
+            'payment_gateway' => ['sometimes','string'],    // required later if needed
+            'how_to_pay'      => ['sometimes','in:full,deposit'],
+            'credit'          => ['sometimes','numeric','min:0'],
+            // Optional address fields
+            'address_line_1'  => ['sometimes','string','nullable'],
+            'address_line_2'  => ['sometimes','string','nullable'],
+            'city'            => ['sometimes','string','nullable'],
+            'state'           => ['sometimes','string','nullable'],
+            'zip_code'        => ['sometimes','string','nullable'],
+            // Guest signup fields (only used if user not logged in)
+            'password'        => ['sometimes','string','min:6'],
+            'confirm_password'=> ['sometimes','same:password'],
+            'referral_code'   => ['sometimes','string','nullable'],
+
+            'merchantPgIdentifier' => ['sometimes'],              // int/string ok
+            'secret_id'            => ['sometimes'],              // int/string ok
+            'currency'             => ['sometimes','string','max:8'],
+            'amount'               => ['sometimes','numeric','min:0'],
+            'successUrl'           => ['sometimes','url'],
+            'errorUrl'             => ['sometimes','url'],
+            'storeName'            => ['sometimes','string','max:255'],
+            'transactionType'      => ['sometimes','string','max:64'],
+            'timeout'              => ['sometimes','string','max:64'],
+            'transactionDateTime'  => ['sometimes','string','max:64'],
+            'language'             => ['sometimes','string','max:16'],
+            'txnToken'             => ['sometimes','string'],
+            'itemList'             => ['sometimes'],              // raw JSON/array
+            'otherInfo'            => ['sometimes'],              // raw JSON/array
+            'merchantCustomerPhone'=> ['sometimes','string','max:64'],
+            'merchantCustomerEmail'=> ['sometimes','email','max:255'],
+            'customer_id'          => ['sometimes'],              // passthrough
+        ], [
+            'term_conditions.required' => 'Please Accept the Terms and Conditions',
+        ]);
+
+
+        if ($v->fails()) {
+            return $this->fail($v->errors(), 'Validation error'); // 422
+        }
+
+
+        $code    = $request->input('code');
+        $booking = Booking::where('code', $code)->first();
+
+        if (!$booking) {
+            return $this->notFound('Booking not found');
+        }
+
+        if (!in_array($booking->status, ['draft','unpaid'])) {
+            return $this->badRequest('Booking is not payable in its current state', [
+                'detail_url' => $booking->getDetailUrl(),
+            ]);
+        }
+
+          // 4) Determine gateway requirement
+    $howToPay        = $request->input('how_to_pay', 'full'); // full | deposit
+    $creditRequested = (float) $request->input('credit', 0);  // wallet not wired -> force 0
+    $paymentGateway  = $request->input('payment_gateway');
+
+
+    // require a gateway unless pay_now will be zero (rare here) or you let guests pay deposit w/out gateway
+    $mustHaveGateway = true;
+    if (empty((float) $booking->deposit) && $howToPay !== 'deposit') {
+        // paying full & deposit not set => still need gateway unless total is 0
+        $mustHaveGateway = ((float)$booking->total > 0);
+    }
+    if ($mustHaveGateway && empty($paymentGateway)) {
+        return $this->fail(['payment_gateway' => ['Payment gateway is required']], 'Validation error', 422);
+    }
+
+    $authUser = Auth::user();
+
+    $userModel = null;
+
+    $email = (string) $request->input('email');
+    if (!$authUser) {
+        // guest path: require password fields & create account, unless you want "guest checkout"
+        $pwd  = $request->input('password');
+        $pwd2 = $request->input('confirm_password');
+
+        if (!$pwd || !$pwd2) {
+            return $this->fail([
+                'errorCode' => ['loginRequired'],
+                'password' => ['Please fill password fields'],
+            ], 'Authentication required', 401);
+        }
+        if ($pwd !== $pwd2) {
+            return $this->fail([
+                'errorCode' => ['loginRequired'],
+                'confirm_password' => ['Confirm password should be same as Password'],
+            ], 'Authentication required', 401);
+        }
+
+        // ensure email not already taken
+        if (Users::where('email', $email)->exists()) {
+            return $this->fail([
+                'errorCode' => ['loginRequired'],
+                'email' => ['You already have an account, please login first to continue'],
+            ], 'Authentication required', 401);
+        }
+
+        // create the user
+        $userModel = Users::create([
+            'name'       => $request->input('first_name') . ' ' . $request->input('last_name'),
+            'first_name' => $request->input('first_name'),
+            'last_name'  => $request->input('last_name'),
+            'email'      => $email,
+            'password'   => password_hash($pwd, PASSWORD_BCRYPT),
+            'status'     => 'publish', // if you have a column; otherwise remove
+        ]);
+
+        // log them in
+        Auth::login($userModel);
+    } else {
+        $userModel = $authUser;
+        // If email changes to another account's email, block that (keep current owner)
+        if ($userModel->email !== $email) {
+            if (Users::where('email', $email)->where('id', '!=', $userModel->id)->exists()) {
+                return $this->fail(['email' => ['Email already in use by another account']], 'Validation error', 422);
+            }
+        }
+    }
+
+    if (!$userModel) {
+        return $this->fail(['_error' => ['Failed to resolve user']], 'Failed to process, please contact support', 401);
+    }
+
+    $phoneNo = (string) $request->input('phone');
+    $phoneTaken = Users::where('phone', $phoneNo)->where('id', '!=', $userModel->id)->exists();
+    if ($phoneTaken) {
+        return $this->fail(['phone' => ['The phone has already been taken.']], 'Validation error', 422);
+    }
+
+    $credit = 0.0;
+    $walletTotalUsed = 0.0;
+
+    // base pay_now
+    $payNow = (float) ($booking->deposit ?? 0);
+    if ($howToPay === 'full' || $payNow <= 0) {
+        $booking->deposit = 0;
+        $payNow = (float) $booking->total;
+    }
+
+     // if wallet was enabled, we’d subtract here. For now keep zero.
+     $payNow = max(0.0, $payNow - $walletTotalUsed);
+
+     // 8) Fill booking “checkout” fields
+     $booking->customer_id        = (int) $userModel->id;
+     $booking->first_name         = $request->input('first_name');
+     $booking->last_name          = $request->input('last_name');
+     $booking->email              = $email;
+     $booking->phone              = $phoneNo;
+     $booking->address            = $request->input('address_line_1');
+     $booking->address2           = $request->input('address_line_2');
+     $booking->city               = $request->input('city');
+     $booking->state              = $request->input('state');
+     $booking->zip_code           = $request->input('zip_code');
+     $booking->country            = $request->input('country');
+     $booking->customer_notes     = $request->input('customer_notes');
+     $booking->gateway            = $paymentGateway;
+     $booking->wallet_credit_used = $credit;
+     $booking->wallet_total_used  = $walletTotalUsed;
+     $booking->pay_now            = $payNow;
+
+     $booking->addMeta('locale', app()->getLocale());
+     $booking->addMeta('how_to_pay', $howToPay);
+
+     $booking->save();
+
+       // 9) Update user profile with provided contact info
+    $userModel->first_name = $request->input('first_name');
+    $userModel->last_name  = $request->input('last_name');
+    $userModel->phone      = $phoneNo;
+    $userModel->address    = $request->input('address_line_1');
+    $userModel->address2   = $request->input('address_line_2');
+    $userModel->city       = $request->input('city');
+    $userModel->state      = $request->input('state');
+    $userModel->zip_code   = $request->input('zip_code');
+    $userModel->country    = $request->input('country');
+    $userModel->save();
+
+    if ($booking->pay_now > 0) {
+        $gateway = strtolower((string)$paymentGateway);
+
+        switch ($gateway) {
+            case 'two_checkout_gateway':
+                case 'two-checkout':
+                case 'twoco':
+                    $twoco = new TwoCheckoutGateway();
+                    $url = $twoco->process($request, $booking, true); // get URL
+                    return $this->ok(['url' => $url], 'Redirect to payment gateway');
+            case 'offline':
+            case 'offline_payment':
+                // mark as completed and create payment record
+                $payment = new Payment();
+                $payment->booking_id      = $booking->id;
+                $payment->status          = 'completed';
+                $payment->payment_gateway = 'offline';
+                $payment->code            = $booking->code . '.' . time();
+                $payment->amount          = (float) $booking->pay_now;
+                $payment->credit          = 0.0;
+                $payment->meta            = ['note' => 'Offline payment (API)'];
+                $payment->save();
+
+                // reflect on booking
+                $booking->paid += (float) $booking->pay_now;
+                if ($booking->paid < (float)$booking->total) {
+                    $booking->status = Booking::PARTIAL_PAYMENT;
+                } else {
+                    $booking->status = Booking::PAID;
+                }
+                $booking->payment_status = 'paid';
+                $booking->is_paid        = ($booking->paid >= (float)$booking->total) ? 1 : 0;
+                $booking->save();
+
+                // (optional) dispatch any events/emails here
+                return $this->ok([
+                    'url' => $booking->getDetailUrl(),
+                ], 'Payment recorded (offline).');
+            default:
+                // not wired: Stripe/PayPal need extra composer deps + gateway classes
+                return $this->badRequest('Payment gateway is not available', [
+                    'gateway' => $paymentGateway,
+                ]);
+        }
+    }
+
+    // 11) Nothing to pay → mark paid if payable_amount <= 0
+    if ($booking->payable_amount <= 0) {
+        $booking->markAsPaid();
+    }
+
+    // (optional) send “booking created” emails; your Mailer is set to log
+    return $this->ok([
+        'url' => $booking->getDetailUrl(),
+    ], 'Your payment has been processed');
+     }
 
         public function addToCart(Request $request)
         {

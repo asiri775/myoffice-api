@@ -60,6 +60,11 @@ $router->group(['prefix' => 'api/'], function ($app) {
     $app->get('oauth/{provider}/redirect', 'SocialAuthController@redirect');
     $app->get('oauth/{provider}/callback', 'SocialAuthController@callback');
 
+
+
+    $app->get('twoco/return', ['as' => 'twoco.return', 'uses' => 'TwoCheckoutController@return']);
+    $app->get('twoco/cancel', ['as' => 'twoco.cancel', 'uses' => 'TwoCoControllerTwoCheckoutController@cancel']);
+
     // protected
     $app->group(['middleware' => 'auth'], function($app) {
         $app->post('space/add-remove-favourite','SpaceController@addRemoveFavourite');
@@ -68,6 +73,10 @@ $router->group(['prefix' => 'api/'], function ($app) {
         $app->delete('space/{id}/', 'SpaceController@destroy');
 
         $app->post('bookings/search','BookingSearchController@search');
+
+        $app->post('bookings/checkout','BookingController@checkout');
+
+
 
         $app->post('bookings/reschedule','BookingController@reschedule');
         $app->post('bookings/invoice','BookingController@invoice');

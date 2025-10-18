@@ -10,7 +10,6 @@ class Payment extends Model
 
     protected $fillable = [
         'booking_id',
-        'user_id',
         'status',           // draft | completed | fail | cancel
         'payment_gateway',
         'code',
