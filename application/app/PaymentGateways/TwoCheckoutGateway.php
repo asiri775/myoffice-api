@@ -73,8 +73,8 @@ class TwoCheckoutGateway
             'customer_id'         => (string) ($booking->customer_id ?? ''),
 
             // Optional mobile/web callback extras
-            'successUrl'          => $request->input('successUrl'),
-            'errorUrl'            => $request->input('errorUrl'),
+            'successUrl'          => route('twoco.return').'?c='.$booking->code,
+            'errorUrl'            => route('twoco.cancel').'?c='.$booking->code,
             'storeName'           => $request->input('storeName'),
             'transactionType'     => $request->input('transactionType'),
             'timeout'             => $request->input('timeout'),
@@ -89,8 +89,8 @@ class TwoCheckoutGateway
 
         // Build endpoint from config (sandbox/live)
         $base = config('services.twoco.sandbox', true)
-            ? 'https://checkout.backpocket.ca/backpocket-payment/sandbox'
-            : 'https://checkout.backpocket.ca/backpocket-payment/live';
+            ? 'http://checkout.backpocket.ca/backpocket-payment/sandbox'
+            : 'http://checkout.backpocket.ca/backpocket-payment/live';
 
         $url = $base.'?'.http_build_query($args, '', '&');
 

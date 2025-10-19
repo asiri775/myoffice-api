@@ -63,7 +63,7 @@ $router->group(['prefix' => 'api/'], function ($app) {
 
 
     $app->get('twoco/return', ['as' => 'twoco.return', 'uses' => 'TwoCheckoutController@return']);
-    $app->get('twoco/cancel', ['as' => 'twoco.cancel', 'uses' => 'TwoCoControllerTwoCheckoutController@cancel']);
+    $app->get('twoco/cancel', ['as' => 'twoco.cancel', 'uses' => 'TwoCheckoutController@cancel']);
 
     // protected
     $app->group(['middleware' => 'auth'], function($app) {
