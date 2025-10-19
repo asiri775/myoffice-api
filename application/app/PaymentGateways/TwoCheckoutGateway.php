@@ -89,8 +89,8 @@ class TwoCheckoutGateway
 
         // Build endpoint from config (sandbox/live)
         $base = config('services.twoco.sandbox', true)
-            ? 'http://checkout.backpocket.ca/backpocket-payment/sandbox'
-            : 'http://checkout.backpocket.ca/backpocket-payment/live';
+            ? 'https://checkout.backpocket.ca/backpocket-payment/sandbox'
+            : 'https://checkout.backpocket.ca/backpocket-payment/live';
 
         $url = $base.'?'.http_build_query($args, '', '&');
 
