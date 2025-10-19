@@ -8,6 +8,15 @@ use Illuminate\Support\Str;
 
 class Booking extends Model
 {
+
+    public const PAID             = 'paid';
+    public const COMPLETED        = 'completed';
+    public const CANCELLED        = 'cancelled';
+    public const UNPAID           = 'unpaid';
+    public const PARTIAL_PAYMENT  = 'partial_payment';
+    public const FAILED           = 'failed';
+    public const DRAFT            = 'draft';
+    public const BOOKED           = 'booked';
     protected $table = 'bravo_bookings';
 
     protected $fillable = [
@@ -15,6 +24,7 @@ class Booking extends Model
         'status','total','total_before_fees','total_before_tax','total_before_discount',
         'buyer_fees','vendor_service_fee','vendor_service_fee_amount',
         'start_date','end_date','total_guests','host_amount','paid',
+        'payment_status','is_paid','deposit','pay_now','wallet_transaction_id',
 
     ];
 
@@ -25,6 +35,9 @@ class Booking extends Model
         'end_date'             => 'datetime',
         'total'                => 'float',
         'host_amount'          => 'float',
+        'paid'                 => 'float',
+        'deposit'              => 'float',
+        'pay_now'              => 'float',
     ];
 
     protected static function booted(): void
@@ -33,8 +46,63 @@ class Booking extends Model
             if (empty($b->code)) {
                 $b->code = strtoupper(Str::random(10));
             }
-            
+
         });
+    }
+
+    public function payment()
+    {
+        return $this->hasOne(Payment::class, 'booking_id', 'id');
+    }
+
+    public function getPayableAmountAttribute(): float
+    {
+        $total = (float) ($this->total ?? 0);
+        $paid  = (float) ($this->paid  ?? 0);
+        return max(0.0, $total - $paid);
+    }
+
+    public function markAsCompleted(): self
+    {
+        // “Completed” in your web flow still treats booking as successful/paid
+        $this->status         = self::COMPLETED;
+        $this->payment_status = self::PAID;      // or keep separate if you track both
+        $this->is_paid        = 1;
+        if ($this->total && ($this->paid ?? 0) < $this->total) {
+            $this->paid = $this->total;
+        }
+        $this->save();
+        // optional: event(new \Modules\Booking\Events\BookingUpdatedEvent($this));
+        return $this;
+    }
+
+    public function markAsPaid(): self
+    {
+        // Keep for Stripe/PayPal flows
+        $this->status         = self::PAID;      // some flows use 'booked'; adjust if you prefer
+        $this->payment_status = self::PAID;
+        $this->is_paid        = 1;
+        $this->paid           = $this->total ?? 0;
+        $this->save();
+        return $this;
+    }
+
+    public function markAsPaymentFailed(): self
+    {
+        $this->status         = self::FAILED;
+        $this->payment_status = self::FAILED;
+        $this->is_paid        = 0;
+        $this->save();
+        return $this;
+    }
+
+    public function service()
+    {
+        $all = get_bookable_services();
+        if ($this->object_model and !empty($all[$this->object_model])) {
+            return $this->hasOne($all[$this->object_model], 'id', 'object_id');
+        }
+        return null;
     }
 
     public function space()
@@ -113,14 +181,7 @@ class Booking extends Model
 
     /* --------------------------------------------------------------- */
 
-    public function markAsPaid(): self
-    {
-        $this->status = 'paid';
-        $this->is_paid = 1;
-        $this->paid = $this->total ?? 0;
-        $this->save();
-        return $this;
-    }
+
 
     public function getCheckoutUrl(?string $platform = null): string
     {

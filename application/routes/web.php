@@ -55,8 +55,15 @@ $router->group(['prefix' => 'api/'], function ($app) {
 
     $app->post('bookings/add-to-cart','BookingController@addToCart');
 
+    $app->post('bookings/coupon','CouponController@apply');
+
     $app->get('oauth/{provider}/redirect', 'SocialAuthController@redirect');
     $app->get('oauth/{provider}/callback', 'SocialAuthController@callback');
+
+
+
+    $app->get('twoco/return', ['as' => 'twoco.return', 'uses' => 'TwoCheckoutController@return']);
+    $app->get('twoco/cancel', ['as' => 'twoco.cancel', 'uses' => 'TwoCheckoutController@cancel']);
 
     // protected
     $app->group(['middleware' => 'auth'], function($app) {
@@ -64,6 +71,22 @@ $router->group(['prefix' => 'api/'], function ($app) {
         $app->post('space/','SpaceController@store');
         $app->put('space/{id}/', 'SpaceController@update');
         $app->delete('space/{id}/', 'SpaceController@destroy');
+
+        $app->post('bookings/search','BookingSearchController@search');
+
+        $app->post('bookings/checkout','BookingController@checkout');
+
+
+
+        $app->post('bookings/reschedule','BookingController@reschedule');
+        $app->post('bookings/invoice','BookingController@invoice');
+        $app->post('bookings/contact-host','BookingController@contactHost');
+        $app->post('bookings/cancel','BookingController@cancelBooking');
+        $app->post('bookings/verify-times','BookingController@verifySelectedTimes');
+        $app->post('bookings/status-change','BookingController@statusChange');
+        $app->post('bookings/{id}','BookingController@show');
+
+
 
     });
 

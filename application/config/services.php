@@ -12,4 +12,9 @@ return [
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
         'redirect'      => env('FACEBOOK_REDIRECT_URI', 'https://your-frontend.example.com/auth/facebook/callback'),
     ],
+    'twoco' => [
+        'sandbox' => (bool) env('TWoco_SANDBOX', true),
+        // optional secret used in your web hash compare
+        'hash_prefix' => env('TWoco_HASH_PREFIX', 'name205CAD2001'),
+    ],
 ];
