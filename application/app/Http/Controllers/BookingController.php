@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CodeHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\CoreSetting;
@@ -28,6 +29,74 @@ final class BookingController extends Controller
      * POST /api/bookings/add-to-cart
 
      */
+
+
+     public function checkoutInit(Request $request)
+{
+    $v = Validator::make($request->all(), [
+        'code' => ['required','string'],
+    ]);
+    if ($v->fails()) {
+        return $this->fail($v->errors(), 'Validation error');
+    }
+
+    $booking = Booking::where('code', $request->input('code'))->first();
+    if (!$booking) {
+        return $this->notFound('Booking not found');
+    }
+    if (!in_array($booking->status, ['draft','unpaid'], true)) {
+        return $this->badRequest('Booking is not payable in its current state');
+    }
+
+    // (optional) attach current user if empty
+    if (!$booking->customer_id && auth()->check()) {
+        $booking->customer_id = auth()->id();
+        $booking->save();
+    }
+
+    // Recalculate & assign
+    try {
+        $info    = CodeHelper::getBookingPriceInfo($booking);
+        $booking = CodeHelper::assignSpacePricingToBooking($booking, $info);
+        $booking->save();
+    } catch (\Throwable $e) {
+        return $this->serverError('Failed to prepare checkout', [
+            'exception' => class_basename($e),
+            'message'   => $e->getMessage(),
+        ]);
+    }
+
+    // Return ONLY the details (no URLs, no platform)
+    return $this->ok([
+        'booking' => [
+            'id'             => $booking->id,
+            'code'           => $booking->code,
+            'status'         => $booking->status,
+            'object_model'   => $booking->object_model,
+            'object_id'      => $booking->object_id,
+            'start_date'     => (string)$booking->start_date,
+            'end_date'       => (string)$booking->end_date,
+
+            'price'          => (float)($booking->price ?? 0),
+            'extra_fee'      => (float)($booking->extra_fee ?? 0),
+            'guest_fee'      => (float)($booking->guest_fee ?? 0),
+            'tax'            => (float)($booking->tax ?? 0),
+            'discount'       => (float)($booking->discount ?? 0),
+            'host_fee'       => (float)($booking->host_fee ?? 0),
+            'payable_amount' => (float)($booking->payable_amount ?? $booking->total ?? 0),
+            'total'          => (float)($booking->total ?? 0),
+
+            'items'           => json_decode((string)$booking->items, true),
+            'extra_fee_items' => json_decode((string)$booking->extra_fee_items, true),
+            'guest_fee_items' => json_decode((string)$booking->guest_fee_items, true),
+            'host_fee_items'  => json_decode((string)$booking->host_fee_items, true),
+        ],
+        'service' => $booking->service ? [
+            'id'    => $booking->service->id,
+            'title' => $booking->service->title ?? null,
+        ] : null,
+    ], 'Checkout details');
+}
 
      public function checkout(Request $request)  {
         $v = Validator::make($request->all(), [

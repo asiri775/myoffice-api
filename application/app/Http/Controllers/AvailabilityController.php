@@ -243,11 +243,11 @@ final class AvailabilityController extends Controller
             }
         }
 
-        return $this->ok($availabilities, 'Availability windows loaded');
+        return $this->ok($availabilities, message: 'Availability windows loaded');
     }
 
     /* ===================== Verify Selected Times ===================== */
-    // POST /api/mobile/availability/verify-selected-times
+    // POST /api/bookings/verify-selected-times
     public function verifySelectedTimes(Request $request)
     {
         // Maintain old response shape inside data
