@@ -37,6 +37,7 @@ class Users extends Model implements Authenticatable
 
    protected $fillable = [
         'name',
+        'user_name',
         'first_name',
         'last_name',
         'email',
@@ -54,13 +55,18 @@ class Users extends Model implements Authenticatable
         'last_login_at',
         'avatar_id',
         'bio',
+        'profile_info',
         'business_name',
         'map_lat',
         'map_lng',
         'map_zoom',
         'instagram_link',
         'facebook_link',
+        'facebook_page',
+        'linkedin_link',
+        'meetup_account',
         'site_link',
+        'myoffice_user_email',
         'super_host',
         'role_id'
     ];
@@ -71,6 +77,7 @@ class Users extends Model implements Authenticatable
 
    protected $casts = [
     'email_verified_at' => 'datetime',
+    'birthday'         => 'date',
    ];
    /*
    * Get Todo of User
@@ -234,7 +241,7 @@ public function verificationUrl($notifiable)
 
 public function getEmailForVerification(): string
 {
-    
+
     return (string) $this->email;
 }
 

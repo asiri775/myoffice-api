@@ -88,6 +88,15 @@ $router->group(['prefix' => 'api/'], function ($app) {
         $app->post('bookings/status-change','BookingController@statusChange');
         $app->post('bookings/{id}','BookingController@show');
 
+        $app->get('user/notification-settings','UserNotificationSettingsController@show');
+        $app->put('user/notification-settings','UserNotificationSettingsController@update');
+        $app->get('user/payment-methods','UserPaymentMethodController@index');
+        $app->post('user/payment-methods','UserPaymentMethodController@store');
+        $app->get('user/profile','UserProfileController@show');
+        $app->put('user/profile','UserProfileController@update');
+        $app->get('user/social-links','UserProfileController@showSocialLinks');
+        $app->put('user/social-links','UserProfileController@updateSocialLinks');
+        $app->get('user/favourites','UserFavouriteController@index');
 
 
     });
