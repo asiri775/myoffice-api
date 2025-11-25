@@ -18,8 +18,7 @@ class Review extends Model
 
     public function space()
     {
-        return $this->belongsTo(Space::class, 'object_id')
-                    ->where('object_model', 'space');
+        return $this->belongsTo(Space::class, 'object_id');
     }
 
     public function scopeApproved($q)

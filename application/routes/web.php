@@ -73,6 +73,7 @@ $router->group(['prefix' => 'api/'], function ($app) {
         $app->post('space/','SpaceController@store');
         $app->put('space/{id}/', 'SpaceController@update');
         $app->delete('space/{id}/', 'SpaceController@destroy');
+        $app->post('space/{space_id}/reviews', 'SpaceController@submitReview');
 
         $app->post('bookings/search','BookingSearchController@search');
 
@@ -86,11 +87,37 @@ $router->group(['prefix' => 'api/'], function ($app) {
         $app->post('bookings/cancel','BookingController@cancelBooking');
         $app->post('bookings/in/verify-times','BookingController@verifySelectedTimes');
         $app->post('bookings/status-change','BookingController@statusChange');
-        $app->post('bookings/{id}','BookingController@show');
+        $app->get('bookings/{booking_id}','BookingController@show');
 
         // User notification settings
         $app->get('user/notification-settings', 'UsersController@getNotificationSettings');
         $app->put('user/notification-settings', 'UsersController@updateNotificationSettings');
+
+        // User profile
+        $app->get('user/profile', 'UsersController@getProfile');
+        $app->put('user/profile', 'UsersController@updateProfile');
+
+        // User social media links
+        $app->get('user/social-links', 'UsersController@getSocialLinks');
+        $app->put('user/social-links', 'UsersController@updateSocialLinks');
+
+        // User favourites
+        $app->get('user/favourites', 'UsersController@getFavourites');
+        $app->post('user/favourites/toggle', 'UsersController@toggleFavourite');
+
+        // User reviews
+        $app->get('user/reviews', 'UsersController@getReviews');
+
+        // User support
+        $app->post('user/support', 'UsersController@submitSupport');
+
+        // User bookings
+        $app->get('user/bookings', 'UsersController@getBookings');
+
+        // User payment methods
+        $app->get('user/payment-methods', 'UsersController@getPaymentMethods');
+        $app->post('user/payment-methods', 'UsersController@savePaymentMethod');
+        $app->put('user/payment-methods/{id}/set-default', 'UsersController@setDefaultPaymentMethod');
 
 
 

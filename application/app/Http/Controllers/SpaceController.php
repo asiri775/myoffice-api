@@ -10,9 +10,10 @@ use App\Models\Term;
 use App\Models\Media;
 use App\Support\ApiResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
 
 use Auth;
-use Validator;
 class SpaceController extends Controller
 {
     /**
@@ -530,6 +531,96 @@ class SpaceController extends Controller
       if (!$path) return null;
       $path = trim($path, "[]\"\\");
       return rtrim($this->domain_url, '/').'/'.$path;
+  }
+
+  /**
+   * POST /api/space/{space_id}/reviews
+   * Submit review for a space
+   */
+  public function submitReview(Request $request): JsonResponse
+  {
+      try {
+          $user = Auth::user();
+          if (!$user) {
+              return $this->unauthorized('Unauthorized: user not found or token invalid');
+          }
+
+          // Get space_id from route parameter
+          $spaceId = (int) $request->route('space_id');
+          if ($spaceId <= 0) {
+              return $this->badRequest('Invalid space ID');
+          }
+
+          // Find the space
+          $space = Space::find($spaceId);
+          if (!$space) {
+              return $this->notFound('Space not found');
+          }
+
+          // Validate input
+          $validator = Validator::make($request->all(), [
+              'title' => ['required', 'string', 'max:255'],
+              'description' => ['required', 'string', 'min:10'],
+              'rating' => ['required', 'numeric', 'min:0', 'max:5'],
+          ], [
+              'title.required' => 'The title field is required.',
+              'title.string' => 'The title must be a string.',
+              'title.max' => 'The title may not be greater than 255 characters.',
+              'description.required' => 'The description field is required.',
+              'description.string' => 'The description must be a string.',
+              'description.min' => 'The description must be at least 10 characters.',
+              'rating.required' => 'The rating field is required.',
+              'rating.numeric' => 'The rating must be a number.',
+              'rating.min' => 'The rating must be at least 0.',
+              'rating.max' => 'The rating must not be greater than 5.',
+          ]);
+
+          if ($validator->fails()) {
+              return response()->json([
+                  'success' => false,
+                  'message' => 'Validation error',
+                  'errors' => $validator->errors()->toArray(),
+              ], 422);
+          }
+
+          $validated = $validator->validated();
+
+          // Check if user already reviewed this space
+          $existingReview = Review::where('object_id', $spaceId)
+              ->where('object_model', 'space')
+              ->where('create_user', $user->id)
+              ->first();
+
+          if ($existingReview) {
+              return response()->json([
+                  'success' => false,
+                  'message' => 'You have already submitted a review for this space',
+              ], 409);
+          }
+
+          // Create the review
+          $review = Review::create([
+              'object_id' => $spaceId,
+              'object_model' => 'space',
+              'title' => $validated['title'],
+              'content' => $validated['description'],
+              'rate_number' => (float) $validated['rating'],
+              'author_ip' => $request->ip(),
+              'status' => 'approved', // You can change this to 'pending' if you want admin approval
+              'vendor_id' => $space->create_user ?? null,
+              'create_user' => $user->id,
+          ]);
+
+          return response()->json([
+              'success' => true,
+              'message' => 'Review submitted successfully',
+          ], 201);
+      } catch (\Throwable $e) {
+          return $this->serverError('Failed to submit review', [
+              'exception' => class_basename($e),
+              'message' => $e->getMessage(),
+          ]);
+      }
   }
 
   private function galleryUrls($galleryCsv)

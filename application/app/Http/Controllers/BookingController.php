@@ -409,7 +409,7 @@ final class BookingController extends Controller
         }
 
 
-        public function show($id)
+        public function show(Request $request)
         {
             try {
                 $userId = Auth::id();
@@ -417,7 +417,8 @@ final class BookingController extends Controller
                     return $this->unauthorized();
                 }
 
-                $booking = Booking::find($id);
+                $bookingId = (int) $request->route('booking_id');
+                $booking = Booking::find($bookingId);
                 if (!$booking) {
                     return $this->notFound("Booking not found");
                 }
@@ -427,59 +428,90 @@ final class BookingController extends Controller
                     return $this->forbidden("You do not have permission to view this booking");
                 }
 
-                $space    = Space::find($booking->object_id);
-                $customer = User::find($booking->customer_id);
-                $payment  = Payment::where('booking_id', $booking->id)->first();
-                $categories = SpaceTerm::where('target_id', $booking->object_id)
-                    ->pluck('term_id')
-                    ->toArray();
+                $space = Space::find($booking->object_id);
+                $customer = Users::find($booking->customer_id);
+                $payment = Payment::where('booking_id', $booking->id)->first();
 
-                $fmt = function ($val) {
-                    if (function_exists('format_price')) return format_price($val);
-                    return is_null($val) ? '-' : '$' . number_format((float) $val, 2);
-                };
+                // Get image URL
+                $imageUrl = null;
+                $domainUrl = "https://myoffice.mybackpocket.co/uploads/";
+                if ($space && $space->banner_image_id) {
+                    $mediaPath = \App\Models\Media::where('id', $space->banner_image_id)->value('file_path');
+                    if ($mediaPath) {
+                        $mediaPath = trim($mediaPath, "[]\"\\");
+                        $imageUrl = rtrim($domainUrl, '/') . '/' . $mediaPath;
+                    }
+                }
+
+                // Format address
+                $addressParts = array_filter([
+                    $space->address ?? null,
+                    $space->city ?? null,
+                    $space->state ?? null,
+                    $space->country ?? null
+                ]);
+                $address = !empty($addressParts) ? implode(', ', $addressParts) : ($space->address ?? '');
+
+                // Get price per hour
+                $pricePerHour = $space ? ($space->discounted_hourly ?? $space->hourly ?? 0) : 0;
+
+                // Format dates
+                $date = $booking->start_date ? $booking->start_date->format('Y-m-d') : null;
+                $startTime = $booking->start_date ? $booking->start_date->format('H:i') : null;
+                $endTime = $booking->end_date ? $booking->end_date->format('H:i') : null;
+                $createdAt = $booking->created_at ? $booking->created_at->toIso8601String() : null;
+
+                // Get payment method and transaction ID
+                $paymentMethod = null;
+                $transactionId = null;
+                if ($payment) {
+                    $paymentMethod = $payment->payment_gateway ?? null;
+                    // Try to get transaction ID from payment meta or code
+                    $transactionId = $payment->code ?? ($payment->meta['transaction_id'] ?? null);
+                }
+
+                // Format status (map to user-friendly status)
+                $status = $booking->status;
+                $statusMap = [
+                    'paid' => 'confirmed',
+                    'completed' => 'confirmed',
+                    'booked' => 'confirmed',
+                    'unpaid' => 'pending',
+                    'draft' => 'pending',
+                    'cancelled' => 'cancelled',
+                    'failed' => 'failed',
+                ];
+                $status = $statusMap[$status] ?? $status;
 
                 $data = [
                     'id' => $booking->id,
-                    'code' => $booking->code,
-                    'status' => $booking->status,
-                    'status_text' => $this->statusText($booking->status),
-                    'status_class' => $this->statusClass($booking->status),
-                    'is_archive' => (int) ($booking->is_archive ?? 0),
-                    'object_id' => $booking->object_id,
-                    'space' => $space ? [
+                    'listing' => $space ? [
                         'id' => $space->id,
                         'title' => $space->title,
-                        'address' => $space->address,
-                        'categories' => $categories,
+                        'address' => $address,
+                        'image_url' => $imageUrl,
+                        'rating' => (float) ($space->review_score ?? 0),
+                        'price_per_hour' => (float) $pricePerHour,
                     ] : null,
-                    'customer' => $customer ? [
+                    'user' => $customer ? [
                         'id' => $customer->id,
                         'name' => trim(($customer->first_name ?? '') . ' ' . ($customer->last_name ?? '')),
                     ] : null,
-                    'start_date' => $booking->start_date,
-                    'end_date' => $booking->end_date,
-                    'total' => (float) $booking->total,
-                    'total_formatted' => $fmt($booking->total),
-                    'host_amount' => (float) $booking->host_amount,
-                    'host_amount_formatted' => $fmt($booking->host_amount),
-                    'transaction' => $payment ? [
-                        'id' => $payment->id,
-                        'status' => $payment->status,
-                        'status_text' => $payment->status === 'completed' ? 'PAID' : 'UNPAID',
-                        'gateway' => $payment->payment_gateway,
-                        'amount' => (float) $payment->amount,
-                        'credit' => (float) $payment->credit,
-                    ] : null,
+                    'date' => $date,
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                    'total_price' => (float) ($booking->total ?? 0),
+                    'status' => $status,
+                    'created_at' => $createdAt,
+                    'payment_method' => $paymentMethod,
+                    'transaction_id' => $transactionId,
                 ];
 
-                return $this->ok($data, "Booking detail fetched successfully");
+                return response()->json($data, 200);
             } catch (\Throwable $e) {
                 return $this->serverError("Failed to fetch booking details", [
                     'exception' => class_basename($e),
                     'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
                 ]);
             }
         }
