@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 
 use App\Support\ApiResponse;
 use App\Models\Users;
+use App\Models\UserMeta;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 final class UsersController extends Controller
 {
@@ -55,7 +57,7 @@ final class UsersController extends Controller
             'last_name'     => ['required','string','min:2','max:15','regex:/^[A-Za-z]{2,15}$/'],
             'email'         => ['required','string','email','max:255', Rule::unique('users', 'email')],
             'password'      => ['required','string','min:8','regex:/^\S{8,}$/'],
-            'role_id'       => ['required'],
+            'role_id'       => ['nullable','integer'],
             'country'       => ['nullable','string'],
             'mobile_number' => ['nullable','string'],
         ], [
@@ -90,7 +92,7 @@ final class UsersController extends Controller
                     'name'       => $name,
                     'email'      => $email,
                     'password'   => Hash::make($data['password']),
-                    'role_id'    => $data['role_id'],
+                    'role_id'    => $data['role_id'] ?? 2,
                     'super_host' => 0,
                     'country'    => $data['country'] ?? null,
                     'phone'      => $data['mobile_number'] ?? null,
@@ -127,6 +129,172 @@ final class UsersController extends Controller
                 'status'  => 'error',
                 'message' => env('APP_DEBUG') ? $e->getMessage() : 'Unable to register user',
             ], 500);
+        }
+    }
+
+    /**
+     * GET /api/user/notification-settings
+     * Get user notification settings
+     */
+    public function getNotificationSettings(Request $request): JsonResponse
+    {
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return $this->unauthorized();
+            }
+
+            $user = Users::find($userId);
+            if (!$user) {
+                return $this->notFound('User not found');
+            }
+
+            // Get notification channels
+            $channelsJson = UserMeta::getValue($userId, 'notification_channels');
+            $notificationChannels = $channelsJson ? json_decode($channelsJson, true) : ['email'];
+
+            // Get email (from user table or meta)
+            $email = $user->email ?? UserMeta::getValue($userId, 'notification_email');
+
+            // Get phone number (from user table or meta)
+            $phoneNumber = $user->phone ?? UserMeta::getValue($userId, 'notification_phone_number');
+
+            // Get notifications_enabled
+            $notificationsEnabledJson = UserMeta::getValue($userId, 'notifications_enabled');
+            $notificationsEnabled = $notificationsEnabledJson 
+                ? json_decode($notificationsEnabledJson, true) 
+                : [
+                    'account_changes' => true,
+                    'store_offers' => false,
+                    'special_events' => true,
+                    'budget_warnings' => true,
+                ];
+
+            $data = [
+                'notification_channels' => $notificationChannels,
+                'email' => $email,
+                'phone_number' => $phoneNumber,
+                'notifications_enabled' => $notificationsEnabled,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Notification settings retrieved successfully',
+                'data' => $data,
+            ], 200);
+        } catch (\Throwable $e) {
+            return $this->serverError('Failed to retrieve notification settings', [
+                'exception' => class_basename($e),
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * PUT /api/user/notification-settings
+     * Update user notification settings
+     */
+    public function updateNotificationSettings(Request $request): JsonResponse
+    {
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return $this->unauthorized();
+            }
+
+            $user = Users::find($userId);
+            if (!$user) {
+                return $this->notFound('User not found');
+            }
+
+            // Validate input
+            $validator = Validator::make($request->all(), [
+                'notification_channels' => ['nullable', 'array'],
+                'notification_channels.*' => ['string', 'in:text,email,whatsapp,push'],
+                'email' => ['nullable', 'string', 'email'],
+                'phone_number' => ['nullable', 'string'],
+                'notifications_enabled' => ['nullable', 'array'],
+                'notifications_enabled.account_changes' => ['nullable', 'boolean'],
+                'notifications_enabled.store_offers' => ['nullable', 'boolean'],
+                'notifications_enabled.special_events' => ['nullable', 'boolean'],
+                'notifications_enabled.budget_warnings' => ['nullable', 'boolean'],
+            ]);
+
+            if ($validator->fails()) {
+                return $this->fail($validator->errors()->toArray(), 'Validation error');
+            }
+
+            $validated = $validator->validated();
+            $settingsToUpdate = [];
+
+            // Update notification_channels
+            if (isset($validated['notification_channels'])) {
+                $settingsToUpdate['notification_channels'] = json_encode($validated['notification_channels']);
+            }
+
+            // Update email (in user table and meta)
+            if (isset($validated['email'])) {
+                $user->email = $validated['email'];
+                $settingsToUpdate['notification_email'] = $validated['email'];
+            }
+
+            // Update phone_number (in user table and meta)
+            if (isset($validated['phone_number'])) {
+                $user->phone = $validated['phone_number'];
+                $settingsToUpdate['notification_phone_number'] = $validated['phone_number'];
+            }
+
+            // Update notifications_enabled
+            if (isset($validated['notifications_enabled'])) {
+                $settingsToUpdate['notifications_enabled'] = json_encode($validated['notifications_enabled']);
+            }
+
+            // Save user model changes
+            if (isset($validated['email']) || isset($validated['phone_number'])) {
+                $user->save();
+            }
+
+            // Update meta
+            if (!empty($settingsToUpdate)) {
+                UserMeta::upsertPairs($userId, $settingsToUpdate);
+            }
+
+            // Get updated settings for response
+            $channelsJson = UserMeta::getValue($userId, 'notification_channels');
+            $notificationChannels = $channelsJson 
+                ? json_decode($channelsJson, true) 
+                : ($validated['notification_channels'] ?? ['email']);
+
+            $email = $user->email ?? UserMeta::getValue($userId, 'notification_email');
+            $phoneNumber = $user->phone ?? UserMeta::getValue($userId, 'notification_phone_number');
+
+            $notificationsEnabledJson = UserMeta::getValue($userId, 'notifications_enabled');
+            $notificationsEnabled = $notificationsEnabledJson 
+                ? json_decode($notificationsEnabledJson, true) 
+                : ($validated['notifications_enabled'] ?? [
+                    'account_changes' => true,
+                    'store_offers' => false,
+                    'special_events' => true,
+                    'budget_warnings' => true,
+                ]);
+
+            $data = [
+                'notification_channels' => $notificationChannels,
+                'email' => $email,
+                'phone_number' => $phoneNumber,
+                'notifications_enabled' => $notificationsEnabled,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Notification settings updated successfully',
+                'data' => $data,
+            ], 200);
+        } catch (\Throwable $e) {
+            return $this->serverError('Failed to update notification settings', [
+                'exception' => class_basename($e),
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 

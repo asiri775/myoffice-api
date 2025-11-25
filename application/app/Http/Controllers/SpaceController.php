@@ -347,6 +347,18 @@ class SpaceController extends Controller
       // increment clicks
       $space->increment('clicks');
 
+      // Get authenticated user (if any) for favorite checking
+      $user = Auth::user();
+      $userId = $user ? $user->id : null;
+
+      // Check if main space is favorited
+      $isFavourited = false;
+      if ($userId) {
+          $isFavourited = AddToFavourite::where('user_id', $userId)
+              ->where('object_id', $space->id)
+              ->exists();
+      }
+
       // category & parking (parking by slug)
       $termRows = $space->terms->load('term')->pluck('term');
       $terms    = $termRows->filter(); // drop nulls if any
@@ -361,8 +373,9 @@ class SpaceController extends Controller
 
       // related spaces (within ~20km), keep Eloquent + safe binding
       $relatedSpaces = [];
+      $relatedSpaceIds = [];
       if (!is_null($space->map_lat) && !is_null($space->map_lng)) {
-          $relatedSpaces = Space::select([
+          $relatedSpacesQuery = Space::select([
                   'id','title','slug','banner_image_id','gallery',
                   'map_lat','map_lng','city','state','country',
                   'price','sale_price','review_score'
@@ -374,25 +387,39 @@ class SpaceController extends Controller
                   [$space->map_lng, $space->map_lat]
               )
               ->limit(12)
-              ->get()
-              ->map(function ($r) {
-                  return [
-                      'id'           => $r->id,
-                      'title'        => $r->title,
-                      'slug'         => $r->slug,
-                      'image_url'    => $this->mediaUrl($r->banner_image_id),
-                      'gallery_urls' => $this->galleryUrls($r->gallery),
-                      'map_lat'      => $r->map_lat,
-                      'map_lng'      => $r->map_lng,
-                      'city'         => $r->city,
-                      'state'        => $r->state,
-                      'country'      => $r->country,
-                      'price'        => $r->price,
-                      'sale_price'   => $r->sale_price,
-                      'review_score' => $r->review_score,
-                  ];
-              })
-              ->toArray();
+              ->get();
+
+          // Collect related space IDs for batch favorite check
+          $relatedSpaceIds = $relatedSpacesQuery->pluck('id')->toArray();
+
+          // Batch check favorites for all related spaces (if user is authenticated)
+          $favouritedSpaceIds = [];
+          if ($userId && !empty($relatedSpaceIds)) {
+              $favouritedSpaceIds = AddToFavourite::where('user_id', $userId)
+                  ->whereIn('object_id', $relatedSpaceIds)
+                  ->pluck('object_id')
+                  ->toArray();
+          }
+
+          $relatedSpaces = $relatedSpacesQuery->map(function ($r) use ($favouritedSpaceIds) {
+              return [
+                  'id'           => $r->id,
+                  'title'        => $r->title,
+                  'slug'         => $r->slug,
+                  'image_url'    => $this->mediaUrl($r->banner_image_id),
+                  'gallery_urls' => $this->galleryUrls($r->gallery),
+                  'map_lat'      => $r->map_lat,
+                  'map_lng'      => $r->map_lng,
+                  'city'         => $r->city,
+                  'state'        => $r->state,
+                  'country'      => $r->country,
+                  'price'        => $r->price,
+                  'sale_price'   => $r->sale_price,
+                  'review_score' => $r->review_score,
+                  'favourited'   => in_array($r->id, $favouritedSpaceIds),
+              ];
+          })
+          ->toArray();
       }
 
       // totals
@@ -483,6 +510,7 @@ class SpaceController extends Controller
                                    ])->values(),
           'category_name'          => $categoryName,
           'parking'                => $parkingName,
+          'favourited'             => $isFavourited,
           'related_spaces'         => $relatedSpaces,
           'totalRatings'           => $totalRatings,
           'totalBookings'          => $totalBookings,

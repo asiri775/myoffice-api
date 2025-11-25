@@ -88,6 +88,10 @@ $router->group(['prefix' => 'api/'], function ($app) {
         $app->post('bookings/status-change','BookingController@statusChange');
         $app->post('bookings/{id}','BookingController@show');
 
+        // User notification settings
+        $app->get('user/notification-settings', 'UsersController@getNotificationSettings');
+        $app->put('user/notification-settings', 'UsersController@updateNotificationSettings');
+
 
 
     });

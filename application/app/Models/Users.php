@@ -64,6 +64,11 @@ class Users extends Model implements Authenticatable
         'super_host',
         'role_id'
     ];
+    
+    protected $attributes = [
+        'role_id' => 2,
+    ];
+    
    protected $hidden = [
     'password',
     'remember_token',

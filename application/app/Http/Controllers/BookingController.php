@@ -215,6 +215,7 @@ final class BookingController extends Controller
             'last_name'  => $request->input('last_name'),
             'email'      => $email,
             'password'   => password_hash($pwd, PASSWORD_BCRYPT),
+            'role_id'    => 2,
             'status'     => 'publish', // if you have a column; otherwise remove
         ]);
 
@@ -508,9 +509,27 @@ final class BookingController extends Controller
                     return $this->forbidden('You do not have permission to modify this booking');
                 }
 
+                // Parse new dates
+                $newStartDate = Carbon::parse($validated['newstart_date']);
+                $newEndDate = Carbon::parse($validated['newend_date']);
+                $now = Carbon::now();
+
+                // Prevent rescheduling to past dates
+                if ($newStartDate->isPast()) {
+                    return $this->fail([
+                        'newstart_date' => ['Cannot reschedule to a past date. The start date must be in the future.']
+                    ], 'Validation error', 422);
+                }
+
+                if ($newEndDate->isPast()) {
+                    return $this->fail([
+                        'newend_date' => ['Cannot reschedule to a past date. The end date must be in the future.']
+                    ], 'Validation error', 422);
+                }
+
                 // Update times
-                $booking->start_date = Carbon::parse($validated['newstart_date'])->format('Y-m-d H:i:s');
-                $booking->end_date   = Carbon::parse($validated['newend_date'])->format('Y-m-d H:i:s');
+                $booking->start_date = $newStartDate->format('Y-m-d H:i:s');
+                $booking->end_date   = $newEndDate->format('Y-m-d H:i:s');
                 $booking->save();
 
                 $data = [
@@ -762,6 +781,7 @@ public function statusChange(Request $request)
 
         // Normalize new status
         $newStatus = strtolower(trim($validated['changetostatus']));
+        $currentStatus = strtolower(trim($booking->status ?? 'draft'));
 
         // Optional: restrict allowed statuses
         $allowedStatuses = [
@@ -770,6 +790,16 @@ public function statusChange(Request $request)
         if (!in_array($newStatus, $allowedStatuses, true)) {
             return $this->fail([
                 'changetostatus' => ['Invalid status. Allowed: ' . implode(', ', $allowedStatuses)]
+            ], 'Validation error', 422);
+        }
+
+        // Validate status flow - prevent invalid transitions
+        if (!$this->isValidStatusTransition($currentStatus, $newStatus)) {
+            return $this->fail([
+                'changetostatus' => [
+                    "Invalid status transition. Cannot change from '{$currentStatus}' to '{$newStatus}'. " .
+                    $this->getValidTransitionsMessage($currentStatus)
+                ]
             ], 'Validation error', 422);
         }
 
@@ -827,6 +857,71 @@ public function cancelBooking(Request $request)
             return $this->forbidden('You do not have permission to cancel this booking');
         }
 
+        // Prevent cancelling if booking is already completed/checked-out/checked-in
+        $currentStatus = strtolower(trim($booking->status ?? ''));
+        $nonCancellableStatuses = ['completed', 'checked-out', 'checked-in'];
+        
+        if (in_array($currentStatus, $nonCancellableStatuses, true)) {
+            return $this->fail([
+                'booking_id' => [
+                    "Cannot cancel booking. Booking is already {$currentStatus}. " .
+                    "Only bookings with status 'draft', 'booked', 'failed', or 'cancelled' can be cancelled."
+                ]
+            ], 'Validation error', 422);
+        }
+
+        // Check if already cancelled
+        if ($currentStatus === 'cancelled') {
+            return $this->fail([
+                'booking_id' => ['Booking is already cancelled.']
+            ], 'Validation error', 422);
+        }
+
+        // Process refund if payment was made
+        $refundProcessed = false;
+        $refundAmount = 0.0;
+        $payment = $booking->payment;
+        
+        // Check if booking has been paid
+        $isPaid = (bool) ($booking->is_paid ?? false);
+        $paidAmount = (float) ($booking->paid ?? 0);
+        
+        if ($isPaid && $paidAmount > 0) {
+            // Process refund
+            $refundAmount = $paidAmount;
+            
+            // Update payment status to cancelled/refunded
+            if ($payment) {
+                $payment->status = 'cancel';
+                $paymentLogs = is_array($payment->logs) ? $payment->logs : [];
+                if (is_string($payment->logs)) {
+                    $paymentLogs = json_decode($payment->logs, true) ?: [];
+                }
+                $paymentLogs['refund'] = [
+                    'amount' => $refundAmount,
+                    'processed_at' => now()->toDateTimeString(),
+                    'processed_by' => $userId,
+                ];
+                $payment->logs = json_encode($paymentLogs);
+                $payment->save();
+            }
+            
+            // Reset booking payment status
+            $booking->is_paid = 0;
+            $booking->paid = 0;
+            $booking->payment_status = 'unpaid';
+            
+            $refundProcessed = true;
+            
+            // Log refund for audit trail
+            \Log::info('Booking cancellation refund processed', [
+                'booking_id' => $booking->id,
+                'booking_code' => $booking->code,
+                'refund_amount' => $refundAmount,
+                'cancelled_by' => $userId,
+            ]);
+        }
+
         // Update booking status
         $booking->status = 'cancelled';
         $booking->save();
@@ -836,12 +931,20 @@ public function cancelBooking(Request $request)
             $booking->sendBookingNotifications();
         }
 
-        return $this->ok([
+        $responseData = [
             'booking_id'   => $booking->id,
             'code'         => $booking->code,
             'new_status'   => $booking->status,
             'status_text'  => strtoupper($booking->status),
-        ], 'Booking cancelled successfully.');
+            'refund_processed' => $refundProcessed,
+        ];
+
+        if ($refundProcessed) {
+            $responseData['refund_amount'] = $refundAmount;
+            $responseData['refund_message'] = "Refund of $" . number_format($refundAmount, 2) . " has been processed.";
+        }
+
+        return $this->ok($responseData, 'Booking cancelled successfully.');
 
     } catch (\Throwable $e) {
         return $this->serverError('Failed to cancel booking', [
@@ -931,6 +1034,64 @@ public function contactHost(Request $request)
             'no-show'     => 'NO-SHOW',
             default       => strtoupper($status ?? 'UNKNOWN'),
         };
+    }
+
+    /**
+     * Validate if a status transition is allowed
+     * 
+     * Valid flow:
+     * - draft → booked, failed, cancelled
+     * - booked → checked-in, cancelled
+     * - checked-in → checked-out, cancelled
+     * - checked-out → completed, cancelled
+     * - completed → (no transitions allowed - final state)
+     * - cancelled → (no transitions allowed - final state)
+     * - failed → (no transitions allowed - final state)
+     */
+    protected function isValidStatusTransition(string $currentStatus, string $newStatus): bool
+    {
+        // Same status is always valid (no-op)
+        if ($currentStatus === $newStatus) {
+            return true;
+        }
+
+        // Define valid transitions
+        $validTransitions = [
+            'draft' => ['booked', 'failed', 'cancelled'],
+            'booked' => ['checked-in', 'cancelled'],
+            'checked-in' => ['checked-out', 'cancelled'],
+            'checked-out' => ['completed', 'cancelled'],
+            'completed' => [], // Final state - no transitions allowed
+            'cancelled' => [], // Final state - no transitions allowed
+            'failed' => [], // Final state - no transitions allowed
+        ];
+
+        // Check if transition is valid
+        $allowedNextStatuses = $validTransitions[$currentStatus] ?? [];
+        return in_array($newStatus, $allowedNextStatuses, true);
+    }
+
+    /**
+     * Get a helpful message about valid transitions from current status
+     */
+    protected function getValidTransitionsMessage(string $currentStatus): string
+    {
+        $validTransitions = [
+            'draft' => ['booked', 'failed', 'cancelled'],
+            'booked' => ['checked-in', 'cancelled'],
+            'checked-in' => ['checked-out', 'cancelled'],
+            'checked-out' => ['completed', 'cancelled'],
+            'completed' => ['(no transitions - final state)'],
+            'cancelled' => ['(no transitions - final state)'],
+            'failed' => ['(no transitions - final state)'],
+        ];
+
+        $allowed = $validTransitions[$currentStatus] ?? [];
+        if (empty($allowed)) {
+            return "Current status '{$currentStatus}' is a final state and cannot be changed.";
+        }
+
+        return "Valid transitions from '{$currentStatus}': " . implode(', ', $allowed);
     }
 
     protected function statusClass(?string $status): string
