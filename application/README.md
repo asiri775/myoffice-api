@@ -1,17 +1,34 @@
-# Lumen PHP Framework
+# MyOffice API
 
-[![Build Status](https://travis-ci.org/laravel/lumen-framework.svg)](https://travis-ci.org/laravel/lumen-framework)
-[![Total Downloads](https://img.shields.io/packagist/dt/laravel/lumen-framework)](https://packagist.org/packages/laravel/lumen-framework)
-[![Latest Stable Version](https://img.shields.io/packagist/v/laravel/lumen-framework)](https://packagist.org/packages/laravel/lumen-framework)
-[![License](https://img.shields.io/packagist/l/laravel/lumen)](https://packagist.org/packages/laravel/lumen-framework)
+Laravel Lumen API for MyOffice application.
 
-Laravel Lumen is a stunningly fast PHP micro-framework for building web applications with expressive, elegant syntax. We believe development must be an enjoyable, creative experience to be truly fulfilling. Lumen attempts to take the pain out of development by easing common tasks used in the majority of web projects, such as routing, database abstraction, queueing, and caching.
+## Quick Start
 
-> **Note:** In the years since releasing Lumen, PHP has made a variety of wonderful performance improvements. For this reason, along with the availability of [Laravel Octane](https://laravel.com/docs/octane), we no longer recommend that you begin new projects with Lumen. Instead, we recommend always beginning new projects with [Laravel](https://laravel.com).
+### Start the Development Server
 
-## Official Documentation
+From the project root directory:
 
-Documentation for the framework can be found on the [Lumen website](https://lumen.laravel.com/docs).
+```bash
+php -S localhost:8000 -t .
+```
+
+For detailed startup instructions, see [STARTUP.md](../STARTUP.md) in the project root.
+
+## API Documentation
+
+- **Postman Collection**: Import `MyOffice_API.postman_collection.json` for complete API documentation
+- **Base URL**: `http://localhost:8000` (development) or `http://api.mybackpocket.co` (production)
+- **API Prefix**: `/api/`
+
+## Environment Setup
+
+1. Copy `.env.example` to `.env`
+2. Configure database credentials
+3. Google OAuth credentials are pre-configured
+
+## Official Lumen Documentation
+
+Documentation for the Lumen framework can be found on the [Lumen website](https://lumen.laravel.com/docs).
 
 ## Contributing
 
