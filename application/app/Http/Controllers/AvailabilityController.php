@@ -176,7 +176,7 @@ final class AvailabilityController extends Controller
     }
 
     /* ===================== Available Dates (POST) ===================== */
-    // POST /api/mobile/availability/available-dates
+    // POST /api/bookings/available-dates
     // body: { id, start: YYYY-MM-DD, end: YYYY-MM-DD }
     public function availableDates(Request $request)
     {
@@ -193,15 +193,46 @@ final class AvailabilityController extends Controller
         $start = $request->input('start');
         $end   = $request->input('end');
 
+        // Get the space
+        $space = Space::find($id);
+        if (!$space) {
+            return $this->notFound('Space not found');
+        }
+
+        // Get space working hours
+        $availableFrom = $space->available_from ?? '00:00';
+        $availableTo = $space->available_to ?? '23:59';
+        $firstWorkingDay = $space->first_working_day ?? 'Monday';
+        $lastWorkingDay = $space->last_working_day ?? 'Friday';
+
+        // Map day names to numbers (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+        $dayMap = [
+            'Sunday' => 0, 'Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3,
+            'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6
+        ];
+        $firstDayNum = $dayMap[$firstWorkingDay] ?? 1;
+        $lastDayNum = $dayMap[$lastWorkingDay] ?? 5;
+
         $todayStart = date('Y-m-d').' 00:00:00';
         $availabilities = [];
 
         foreach ($this->datesFromRange($start, $end) as $d) {
             $fromDay = $d.' 00:00:00';
             $toDay   = $d.' 23:59:59';
+            
+            // Skip past dates
             if ($fromDay < $todayStart) continue;
 
-            // bookings overlapping the day
+            // Check if day is within working days
+            $dayOfWeek = (int) date('w', strtotime($d)); // 0 = Sunday, 6 = Saturday
+            if ($dayOfWeek < $firstDayNum || $dayOfWeek > $lastDayNum) {
+                continue; // Skip non-working days
+            }
+
+            // Get all unavailable periods for this day (bookings + blocks)
+            $unavailablePeriods = [];
+
+            // Get bookings overlapping the day
             $bookingBetween = Booking::where('object_model','space')
                 ->where('object_id',$id)
                 ->where('status','!=','draft')
@@ -216,14 +247,24 @@ final class AvailabilityController extends Controller
 
             foreach ($bookingBetween as $b) {
                 [$npStart,$npEnd] = $this->clipToDay($b->start_date, $b->end_date, $fromDay, $toDay);
-                $availabilities[] = [
-                    'title' => "Booked For MyOffice Client {$npStart} - {$npEnd}",
-                    'start' => "{$d} {$npStart}:00",
-                    'end'   => "{$d} {$npEnd}:59",
-                ];
+                // Clip to working hours using time comparison
+                $npStartTime = $this->normalizeTime($npStart);
+                $npEndTime = $this->normalizeTime($npEnd);
+                $workStartTime = $this->normalizeTime($availableFrom);
+                $workEndTime = $this->normalizeTime($availableTo);
+                
+                $clippedStart = max($npStartTime, $workStartTime);
+                $clippedEnd = min($npEndTime, $workEndTime);
+                
+                if ($clippedStart < $clippedEnd) {
+                    $unavailablePeriods[] = [
+                        'start' => $this->formatTime($clippedStart),
+                        'end' => $this->formatTime($clippedEnd),
+                    ];
+                }
             }
 
-            // blocks overlapping the day
+            // Get blocks overlapping the day
             $blockedBetween = SpaceBlockTime::where('bravo_space_id',$id)
                 ->where(function ($q) use ($fromDay,$toDay){
                     $q->whereBetween('from', [$fromDay,$toDay])
@@ -235,15 +276,120 @@ final class AvailabilityController extends Controller
 
             foreach ($blockedBetween as $blk) {
                 [$npStart,$npEnd] = $this->clipToDay($blk->from, $blk->to, $fromDay, $toDay);
+                // Clip to working hours using time comparison
+                $npStartTime = $this->normalizeTime($npStart);
+                $npEndTime = $this->normalizeTime($npEnd);
+                $workStartTime = $this->normalizeTime($availableFrom);
+                $workEndTime = $this->normalizeTime($availableTo);
+                
+                $clippedStart = max($npStartTime, $workStartTime);
+                $clippedEnd = min($npEndTime, $workEndTime);
+                
+                if ($clippedStart < $clippedEnd) {
+                    $unavailablePeriods[] = [
+                        'start' => $this->formatTime($clippedStart),
+                        'end' => $this->formatTime($clippedEnd),
+                    ];
+                }
+            }
+
+            // Sort unavailable periods by start time
+            usort($unavailablePeriods, function($a, $b) {
+                return strcmp($a['start'], $b['start']);
+            });
+
+            // Generate available slots by subtracting unavailable periods from working hours
+            $availableSlots = $this->calculateAvailableSlots($availableFrom, $availableTo, $unavailablePeriods);
+
+            // Add available slots to response
+            foreach ($availableSlots as $slot) {
                 $availabilities[] = [
-                    'title' => "Unavailable </br> {$npStart} - {$npEnd}",
-                    'start' => "{$d} {$npStart}:00",
-                    'end'   => "{$d} {$npEnd}:59",
+                    'title' => "Available {$slot['start']} - {$slot['end']}",
+                    'start' => "{$d} {$slot['start']}:00",
+                    'end'   => "{$d} {$slot['end']}:59",
                 ];
             }
         }
 
-        return $this->ok($availabilities, message: 'Availability windows loaded');
+        return $this->ok($availabilities, 'Availability windows loaded');
+    }
+
+    /**
+     * Calculate available time slots by subtracting unavailable periods from working hours
+     */
+    private function calculateAvailableSlots(string $workStart, string $workEnd, array $unavailablePeriods): array
+    {
+        $availableSlots = [];
+        
+        // If no unavailable periods, the entire working day is available
+        if (empty($unavailablePeriods)) {
+            return [[
+                'start' => $workStart,
+                'end' => $workEnd,
+            ]];
+        }
+
+        $currentStart = $workStart;
+
+        foreach ($unavailablePeriods as $period) {
+            $periodStart = $period['start'];
+            $periodEnd = $period['end'];
+
+            // Normalize times to HH:MM format for comparison
+            $periodStartTime = $this->normalizeTime($periodStart);
+            $periodEndTime = $this->normalizeTime($periodEnd);
+            $currentStartTime = $this->normalizeTime($currentStart);
+            $workEndTime = $this->normalizeTime($workEnd);
+
+            // Clamp unavailable period to working hours
+            $clampedPeriodStart = max($currentStartTime, min($periodStartTime, $workEndTime));
+            $clampedPeriodEnd = max($clampedPeriodStart, min($periodEndTime, $workEndTime));
+
+            // If there's a gap before this unavailable period, add it as available
+            if ($currentStartTime < $clampedPeriodStart) {
+                $availableSlots[] = [
+                    'start' => $this->formatTime($currentStartTime),
+                    'end' => $this->formatTime($clampedPeriodStart),
+                ];
+            }
+
+            // Move current start to after this unavailable period
+            $currentStart = $this->formatTime($clampedPeriodEnd);
+        }
+
+        // Add remaining time after last unavailable period
+        $currentStartTime = $this->normalizeTime($currentStart);
+        $workEndTime = $this->normalizeTime($workEnd);
+        if ($currentStartTime < $workEndTime) {
+            $availableSlots[] = [
+                'start' => $this->formatTime($currentStartTime),
+                'end' => $this->formatTime($workEndTime),
+            ];
+        }
+
+        return $availableSlots;
+    }
+
+    /**
+     * Normalize time string to minutes since midnight for comparison
+     */
+    private function normalizeTime(string $time): int
+    {
+        // Handle formats like "09:00", "9:00", "00:00", "23:59"
+        $parts = explode(':', $time);
+        $hours = (int) ($parts[0] ?? 0);
+        $minutes = (int) ($parts[1] ?? 0);
+        return ($hours * 60) + $minutes;
+    }
+
+    /**
+     * Format minutes since midnight back to HH:MM format
+     */
+    private function formatTime(int $minutes): string
+    {
+        $hours = floor($minutes / 60);
+        $mins = $minutes % 60;
+        return sprintf('%02d:%02d', $hours, $mins);
     }
 
     /* ===================== Verify Selected Times ===================== */
