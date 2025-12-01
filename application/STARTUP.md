@@ -46,3 +46,5 @@ Make sure `.env` file exists in `application/` directory with:
 - Google OAuth credentials (already configured)
 - Mail settings
 
+
+
