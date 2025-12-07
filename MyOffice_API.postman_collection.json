@@ -1,0 +1,1047 @@
+{
+	"info": {
+		"_postman_id": "myoffice-api-collection",
+		"name": "MyOffice API",
+		"description": "Complete API collection for MyOffice application with Google and Facebook OAuth",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{api_key}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://api.mybackpocket.co",
+			"type": "string"
+		},
+		{
+			"key": "api_key",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/login/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "login", ""]
+						},
+						"description": "Authenticate user and get API key"
+					},
+					"response": []
+				},
+				{
+					"name": "Register",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\",\n    \"country\": \"Canada\",\n    \"mobile_number\": \"+1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/register/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "register", ""]
+						},
+						"description": "Register a new user account"
+					},
+					"response": []
+				},
+				{
+					"name": "OAuth - Google",
+					"item": [
+						{
+							"name": "Get Redirect URL",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/oauth/google/redirect",
+									"host": ["{{base_url}}"],
+									"path": ["api", "oauth", "google", "redirect"]
+								},
+								"description": "Get Google OAuth redirect URL. Returns JSON with 'url' field containing the Google OAuth URL to open in browser."
+							},
+							"response": []
+						},
+						{
+							"name": "Callback",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/oauth/google/callback?code=OAUTH_CODE",
+									"host": ["{{base_url}}"],
+									"path": ["api", "oauth", "google", "callback"],
+									"query": [
+										{
+											"key": "code",
+											"value": "OAUTH_CODE",
+											"description": "Authorization code from Google OAuth"
+										}
+									]
+								},
+								"description": "Google OAuth callback - redirects to deep link: myofficeapp://auth/success?token=API_KEY"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "OAuth - Facebook",
+					"item": [
+						{
+							"name": "Get Redirect URL",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/oauth/facebook/redirect",
+									"host": ["{{base_url}}"],
+									"path": ["api", "oauth", "facebook", "redirect"]
+								},
+								"description": "Get Facebook OAuth redirect URL. Returns JSON with 'url' field containing the Facebook OAuth URL to open in browser."
+							},
+							"response": []
+						},
+						{
+							"name": "Callback",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/oauth/facebook/callback?code=OAUTH_CODE",
+									"host": ["{{base_url}}"],
+									"path": ["api", "oauth", "facebook", "callback"],
+									"query": [
+										{
+											"key": "code",
+											"value": "OAUTH_CODE",
+											"description": "Authorization code from Facebook OAuth"
+										}
+									]
+								},
+								"description": "Facebook OAuth callback - redirects to deep link: myofficeapp://auth/success?token=API_KEY"
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Spaces",
+			"item": [
+				{
+					"name": "List Spaces",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/space/?page=0&per_page=10&sortBy=id&orderBy=asc&title=&city=&searched_address=",
+							"host": ["{{base_url}}"],
+							"path": ["api", "space", ""],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "per_page",
+									"value": "10"
+								},
+								{
+									"key": "sortBy",
+									"value": "id"
+								},
+								{
+									"key": "orderBy",
+									"value": "asc"
+								},
+								{
+									"key": "title",
+									"value": ""
+								},
+								{
+									"key": "city",
+									"value": ""
+								},
+								{
+									"key": "searched_address",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get list of spaces with optional filters"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Space Details",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/space/1/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "space", "1", ""]
+						},
+						"description": "Get detailed information about a specific space"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Space",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Cozy Workspace\",\n    \"content\": \"Beautiful workspace description\",\n    \"price\": 50.00,\n    \"sale_price\": 45.00,\n    \"address\": \"123 Main St\",\n    \"city\": \"Toronto\",\n    \"state\": \"ON\",\n    \"country\": \"Canada\",\n    \"map_lat\": 43.6532,\n    \"map_lng\": -79.3832\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/space/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "space", ""]
+						},
+						"description": "Create a new space (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Space",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Updated Workspace Title\",\n    \"price\": 55.00\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/space/1/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "space", "1", ""]
+						},
+						"description": "Update an existing space (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Space",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/space/1/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "space", "1", ""]
+						},
+						"description": "Delete a space (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Add/Remove Favourite",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"space_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/space/add-remove-favourite",
+							"host": ["{{base_url}}"],
+							"path": ["api", "space", "add-remove-favourite"]
+						},
+						"description": "Toggle favourite status for a space (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Review",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"review_title\": \"Great space!\",\n    \"review_content\": \"Had a wonderful experience\",\n    \"review_rate\": 5\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/space/1/reviews",
+							"host": ["{{base_url}}"],
+							"path": ["api", "space", "1", "reviews"]
+						},
+						"description": "Submit a review for a space (requires authentication)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Bookings",
+			"item": [
+				{
+					"name": "Verify Selected Times",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 1,\n    \"start_date\": \"12/25/2024\",\n    \"end_date\": \"12/26/2024\",\n    \"start_hour\": \"09:00\",\n    \"end_hour\": \"17:00\",\n    \"start_ampm\": \"AM\",\n    \"end_ampm\": \"PM\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/verify-times",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "verify-times"]
+						},
+						"description": "Verify if selected times are available for booking"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Available Dates",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 1,\n    \"start_date\": \"12/01/2024\",\n    \"end_date\": \"12/31/2024\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/available-dates",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "available-dates"]
+						},
+						"description": "Get available dates for a space within a date range"
+					},
+					"response": []
+				},
+				{
+					"name": "Add to Cart",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"object_id\": 1,\n    \"object_model\": \"Space\",\n    \"start_date\": \"2024-12-25 09:00:00\",\n    \"end_date\": \"2024-12-26 17:00:00\",\n    \"number\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/add-to-cart",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "add-to-cart"]
+						},
+						"description": "Add a booking to cart"
+					},
+					"response": []
+				},
+				{
+					"name": "Checkout Init",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"BOOKING_CODE\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/checkout-init",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "checkout-init"]
+						},
+						"description": "Initialize checkout process for a booking"
+					},
+					"response": []
+				},
+				{
+					"name": "Checkout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"BOOKING_CODE\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"phone\": \"+1234567890\",\n    \"country\": \"Canada\",\n    \"term_conditions\": true,\n    \"payment_gateway\": \"twoco\",\n    \"how_to_pay\": \"full\",\n    \"address_line_1\": \"123 Main St\",\n    \"city\": \"Toronto\",\n    \"state\": \"ON\",\n    \"zip_code\": \"M5H 2N2\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/checkout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "checkout"]
+						},
+						"description": "Complete checkout process (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Search Bookings",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"search_query\": {\n        \"tType\": \"bookings\",\n        \"status\": \"all\",\n        \"from\": \"01/01/2024\",\n        \"to\": \"12/31/2024\",\n        \"search\": \"\",\n        \"space\": \"\",\n        \"guest\": \"\"\n    },\n    \"page\": 1,\n    \"per_page\": 20,\n    \"is_vendor\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/search",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "search"]
+						},
+						"description": "Search bookings with filters (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Booking Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/bookings/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "1"]
+						},
+						"description": "Get detailed information about a booking (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Reschedule Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"booking_id\": 1,\n    \"start_date\": \"2024-12-27 09:00:00\",\n    \"end_date\": \"2024-12-28 17:00:00\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/reschedule",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "reschedule"]
+						},
+						"description": "Reschedule a booking (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Invoice",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"booking_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/invoice",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "invoice"]
+						},
+						"description": "Get invoice for a booking (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Contact Host",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"booking_id\": 1,\n    \"subject\": \"Question about booking\",\n    \"message\": \"I have a question about my booking\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/contact-host",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "contact-host"]
+						},
+						"description": "Contact host regarding a booking (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"booking_id\": 1,\n    \"reason\": \"Change of plans\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "cancel"]
+						},
+						"description": "Cancel a booking (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Times (Internal)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 1,\n    \"start_date\": \"12/25/2024\",\n    \"end_date\": \"12/26/2024\",\n    \"start_hour\": \"09:00\",\n    \"end_hour\": \"17:00\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/in/verify-times",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "in", "verify-times"]
+						},
+						"description": "Verify times for booking (internal, requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Change Booking Status",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"booking_id\": 1,\n    \"status\": \"completed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/status-change",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "status-change"]
+						},
+						"description": "Change booking status (requires authentication)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Coupons",
+			"item": [
+				{
+					"name": "Apply Coupon",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"booking_code\": \"BOOKING_CODE\",\n    \"code\": \"COUPON_CODE\",\n    \"action\": \"add\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings/coupon",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bookings", "coupon"]
+						},
+						"description": "Apply or remove a coupon from a booking"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User Profile",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "profile"]
+						},
+						"description": "Get current user profile (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"country\": \"Canada\",\n    \"mobile_number\": \"+1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "profile"]
+						},
+						"description": "Update user profile (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Notification Settings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/user/notification-settings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notification-settings"]
+						},
+						"description": "Get user notification settings (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Notification Settings",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email_notifications\": true,\n    \"push_notifications\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/notification-settings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "notification-settings"]
+						},
+						"description": "Update user notification settings (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Social Links",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/user/social-links",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "social-links"]
+						},
+						"description": "Get user social media links (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Social Links",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"facebook\": \"https://facebook.com/username\",\n    \"twitter\": \"https://twitter.com/username\",\n    \"instagram\": \"https://instagram.com/username\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/social-links",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "social-links"]
+						},
+						"description": "Update user social media links (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Favourites",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/user/favourites",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "favourites"]
+						},
+						"description": "Get user's favourite spaces (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Toggle Favourite",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"space_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/favourites/toggle",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "favourites", "toggle"]
+						},
+						"description": "Toggle favourite status for a space (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Reviews",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/user/reviews",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "reviews"]
+						},
+						"description": "Get user's reviews (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Support Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"subject\": \"Support Request\",\n    \"message\": \"I need help with...\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/support",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "support"]
+						},
+						"description": "Submit a support request (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Bookings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/user/bookings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "bookings"]
+						},
+						"description": "Get user's bookings (requires authentication)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Payment Methods",
+			"item": [
+				{
+					"name": "Get Payment Methods",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/user/payment-methods",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "payment-methods"]
+						},
+						"description": "Get user's saved payment methods (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Save Payment Method",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"credit_card\",\n    \"card_number\": \"4111111111111111\",\n    \"expiry_month\": \"12\",\n    \"expiry_year\": \"2025\",\n    \"cvv\": \"123\",\n    \"cardholder_name\": \"John Doe\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/payment-methods",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "payment-methods"]
+						},
+						"description": "Save a payment method (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Set Default Payment Method",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/user/payment-methods/1/set-default",
+							"host": ["{{base_url}}"],
+							"path": ["api", "user", "payment-methods", "1", "set-default"]
+						},
+						"description": "Set a payment method as default (requires authentication)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "TwoCheckout",
+			"item": [
+				{
+					"name": "Return URL",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/twoco/return?order_number=ORDER_NUMBER",
+							"host": ["{{base_url}}"],
+							"path": ["api", "twoco", "return"],
+							"query": [
+								{
+									"key": "order_number",
+									"value": "ORDER_NUMBER"
+								}
+							]
+						},
+						"description": "TwoCheckout payment return callback"
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel URL",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/twoco/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "twoco", "cancel"]
+						},
+						"description": "TwoCheckout payment cancel callback"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Utility",
+			"item": [
+				{
+					"name": "Get API Version",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": ["{{base_url}}"],
+							"path": [""]
+						},
+						"description": "Get API version"
+					},
+					"response": []
+				},
+				{
+					"name": "Mail Config",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/_mail-config",
+							"host": ["{{base_url}}"],
+							"path": ["_mail-config"]
+						},
+						"description": "Get mail configuration (for debugging)"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

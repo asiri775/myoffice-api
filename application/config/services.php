@@ -10,7 +10,7 @@ return [
     'facebook' => [
         'client_id'     => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
-        'redirect'      => env('FACEBOOK_REDIRECT_URI', 'https://your-frontend.example.com/auth/facebook/callback'),
+        'redirect'      => env('FACEBOOK_REDIRECT_URI', 'https://api.mybackpocket.co/api/oauth/facebook/callback'),
     ],
     'twoco' => [
         'sandbox' => (bool) env('TWoco_SANDBOX', true),

@@ -57,8 +57,8 @@ final class SocialAuthController extends Controller
             }
 
             if (!$email) {
-                // For Google, redirect with error; for others, return JSON
-                if ($provider === 'google') {
+                // For Google and Facebook, redirect with error; for others, return JSON
+                if ($provider === 'google' || $provider === 'facebook') {
                     return redirect('myofficeapp://auth/error?message=' . urlencode('Email permission is required on your social account'));
                 }
                 return $this->fail(['email' => ['Email permission is required on your social account']], 'Validation error', 400);
@@ -107,8 +107,8 @@ final class SocialAuthController extends Controller
                 'social_meta_avatar'    => (string) $social->getAvatar(),
             ]);
 
-            // 5) For Google, redirect to deep link; for others, return JSON
-            if ($provider === 'google') {
+            // 5) For Google and Facebook, redirect to deep link; for others, return JSON
+            if ($provider === 'google' || $provider === 'facebook') {
                 $deepLinkUrl = 'myofficeapp://auth/success?token=' . urlencode($user->api_key);
                 return redirect($deepLinkUrl);
             }
@@ -125,8 +125,8 @@ final class SocialAuthController extends Controller
                 ? 'Unable to authenticate with '.$provider
                 : $e->getMessage();
             
-            // For Google, redirect with error; for others, return JSON
-            if ($provider === 'google') {
+            // For Google and Facebook, redirect with error; for others, return JSON
+            if ($provider === 'google' || $provider === 'facebook') {
                 return redirect('myofficeapp://auth/error?message=' . urlencode($msg));
             }
             

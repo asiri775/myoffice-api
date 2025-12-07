@@ -71,12 +71,21 @@ The `.env` file should contain:
 
 ```env
 APP_URL=http://api.mybackpocket.co
+
+# Google OAuth Configuration
 GOOGLE_CLIENT_ID=your_google_client_id_here
 GOOGLE_CLIENT_SECRET=your_google_client_secret_here
 GOOGLE_REDIRECT_URI=http://api.mybackpocket.co/api/oauth/google/callback
+
+# Facebook OAuth Configuration
+FACEBOOK_CLIENT_ID=your_facebook_app_id_here
+FACEBOOK_CLIENT_SECRET=your_facebook_app_secret_here
+FACEBOOK_REDIRECT_URI=https://api.mybackpocket.co/api/oauth/facebook/callback
 ```
 
-**Note:** Replace the placeholder values with your actual Google OAuth credentials from Google Cloud Console.
+**Note:** Replace the placeholder values with your actual OAuth credentials:
+- Google OAuth credentials from [Google Cloud Console](https://console.cloud.google.com/)
+- Facebook OAuth credentials from [Facebook Developers](https://developers.facebook.com/)
 
 ## API Base URL
 

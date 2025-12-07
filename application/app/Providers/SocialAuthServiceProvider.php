@@ -32,14 +32,22 @@ final class SocialAuthServiceProvider extends ServiceProvider
             'services.google.redirect'      => env('GOOGLE_REDIRECT_URI', 'http://api.mybackpocket.co/api/oauth/google/callback'),
         ]);
 
-        // Facebook OAuth - Keep existing database settings logic
-        $fbId     = Settings::get('facebook_client_id', 'advance');
-        $fbSecret = Settings::get('facebook_client_secret', 'advance');
-
+        // Facebook OAuth - Use environment variables
+        // Priority: env vars > database settings
+        $fbId = env('FACEBOOK_CLIENT_ID');
+        $fbSecret = env('FACEBOOK_CLIENT_SECRET');
+        
+        // Fallback to database settings if env vars not set
+        if (!$fbId || !$fbSecret) {
+            $fbId = Settings::get('facebook_client_id', 'advance');
+            $fbSecret = Settings::get('facebook_client_secret', 'advance');
+        }
+        
         if ($fbId && $fbSecret) {
             config([
                 'services.facebook.client_id'     => $fbId,
                 'services.facebook.client_secret' => $fbSecret,
+                'services.facebook.redirect'      => env('FACEBOOK_REDIRECT_URI', 'https://api.mybackpocket.co/api/oauth/facebook/callback'),
             ]);
         }
     }
