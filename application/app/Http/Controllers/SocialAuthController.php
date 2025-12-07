@@ -7,6 +7,7 @@ use App\Models\Users;
 use App\Models\UserMeta;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
@@ -35,7 +36,7 @@ final class SocialAuthController extends Controller
     }
 
     /** GET /api/auth/{provider}/callback */
-    public function callback(Request $request, string $provider): JsonResponse
+    public function callback(Request $request, string $provider): JsonResponse|RedirectResponse
     {
         if (!$this->isAllowed($provider)) {
             return $this->fail(['provider' => ['Provider not supported']], 'Validation error', 422);
@@ -56,6 +57,10 @@ final class SocialAuthController extends Controller
             }
 
             if (!$email) {
+                // For Google and Facebook, redirect with error; for others, return JSON
+                if ($provider === 'google' || $provider === 'facebook') {
+                    return redirect('myofficeapp://auth/error?message=' . urlencode('Email permission is required on your social account'));
+                }
                 return $this->fail(['email' => ['Email permission is required on your social account']], 'Validation error', 400);
             }
 
@@ -102,7 +107,13 @@ final class SocialAuthController extends Controller
                 'social_meta_avatar'    => (string) $social->getAvatar(),
             ]);
 
-            // 5) Respond using standard shape
+            // 5) For Google and Facebook, redirect to deep link; for others, return JSON
+            if ($provider === 'google' || $provider === 'facebook') {
+                $deepLinkUrl = 'myofficeapp://auth/success?token=' . urlencode($user->api_key);
+                return redirect($deepLinkUrl);
+            }
+
+            // For other providers, return JSON response
             $payload = $this->userPayload($user, $user->api_key, UserMeta::getValue($user->id, $avatarKey));
 
             return $created
@@ -113,6 +124,12 @@ final class SocialAuthController extends Controller
             $msg = app()->environment('production')
                 ? 'Unable to authenticate with '.$provider
                 : $e->getMessage();
+            
+            // For Google and Facebook, redirect with error; for others, return JSON
+            if ($provider === 'google' || $provider === 'facebook') {
+                return redirect('myofficeapp://auth/error?message=' . urlencode($msg));
+            }
+            
             return $this->serverError($msg);
         }
     }
