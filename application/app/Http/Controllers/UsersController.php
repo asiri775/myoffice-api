@@ -58,6 +58,30 @@ final class UsersController extends Controller
     }
 
     /**
+     * POST /api/logout
+     */
+    public function logout(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return $this->unauthorized('User not authenticated');
+            }
+
+            // Clear the API key to invalidate the session
+            $user->update(['api_key' => null]);
+
+            return $this->ok(['message' => 'Logged out successfully'], 'Logout successful');
+        } catch (\Throwable $e) {
+            $msg = app()->environment('production') 
+                ? 'Unable to logout' 
+                : $e->getMessage();
+            return $this->serverError($msg);
+        }
+    }
+
+    /**
      * POST /api/register
      */
     public function userRegister(Request $request): JsonResponse
