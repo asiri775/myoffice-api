@@ -69,6 +69,7 @@ $router->group(['prefix' => 'api/'], function ($app) {
 
     // protected
     $app->group(['middleware' => 'auth'], function($app) {
+        $app->post('logout/','UsersController@logout');
         $app->post('space/add-remove-favourite','SpaceController@addRemoveFavourite');
         $app->post('space/','SpaceController@store');
         $app->put('space/{id}/', 'SpaceController@update');
