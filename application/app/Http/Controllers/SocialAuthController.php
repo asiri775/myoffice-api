@@ -9,6 +9,7 @@ use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Socialite\Facades\Socialite;
@@ -36,7 +37,7 @@ final class SocialAuthController extends Controller
     }
 
     /** GET /api/auth/{provider}/callback */
-    public function callback(Request $request, string $provider): JsonResponse|RedirectResponse
+    public function callback(Request $request, string $provider): JsonResponse|RedirectResponse|Response
     {
         if (!$this->isAllowed($provider)) {
             return $this->fail(['provider' => ['Provider not supported']], 'Validation error', 422);
