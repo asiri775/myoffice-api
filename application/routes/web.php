@@ -96,6 +96,7 @@ $router->group(['prefix' => 'api/'], function ($app) {
 
         // User profile
         $app->get('user/profile', 'UsersController@getProfile');
+        $app->post('user/details', 'UsersController@getUserDetails');
         $app->put('user/profile', 'UsersController@updateProfile');
 
         // User social media links
