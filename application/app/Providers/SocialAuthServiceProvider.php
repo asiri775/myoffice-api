@@ -23,12 +23,12 @@ final class SocialAuthServiceProvider extends ServiceProvider
         // Fallback to database settings if env vars not set
         if (!$googleId || !$googleSecret) {
             $googleId = Settings::get('google_client_id', 'advance');
-            $googleSecret = Settings::get('google_client_secret', 'advance');
+        $googleSecret = Settings::get('google_client_secret', 'advance');
         }
-        
-        config([
-            'services.google.client_id'     => $googleId,
-            'services.google.client_secret' => $googleSecret,
+
+            config([
+                'services.google.client_id'     => $googleId,
+                'services.google.client_secret' => $googleSecret,
             'services.google.redirect'      => env('GOOGLE_REDIRECT_URI', 'http://api.mybackpocket.co/api/oauth/google/callback'),
         ]);
 
@@ -42,7 +42,7 @@ final class SocialAuthServiceProvider extends ServiceProvider
             $fbId = Settings::get('facebook_client_id', 'advance');
             $fbSecret = Settings::get('facebook_client_secret', 'advance');
         }
-        
+
         if ($fbId && $fbSecret) {
             config([
                 'services.facebook.client_id'     => $fbId,
