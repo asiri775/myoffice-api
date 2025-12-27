@@ -58,20 +58,25 @@ final class SocialAuthController extends Controller
             $name  = trim($social->getName() ?? '');
             
             // Handle different provider data structures
-            // Google uses: given_name, family_name
-            // Facebook uses: first_name, last_name
             if ($provider === 'google') {
-                $first = trim($social->user['given_name'] ?? '');
-                $last  = trim($social->user['family_name'] ?? '');
+                // Google uses: given_name, family_name
+                $userData = is_array($social->user) ? $social->user : [];
+                $first = trim($userData['given_name'] ?? '');
+                $last  = trim($userData['family_name'] ?? '');
+                
+                if (!$first || !$last) {
+                    if ($name) {
+                        [$first, $last] = array_pad(explode(' ', $name, 2), 2, '');
+                    }
+                }
             } else {
-                // Facebook and other providers
-                $first = trim($social->user['first_name'] ?? $social->offsetGet('first_name') ?? '');
-                $last  = trim($social->user['last_name'] ?? $social->offsetGet('last_name') ?? '');
-            }
-
-            if (!$first || !$last) {
+                // Facebook and other providers - just use the name and split it
+                // Don't try to access first_name/last_name from user array
                 if ($name) {
                     [$first, $last] = array_pad(explode(' ', $name, 2), 2, '');
+                } else {
+                    $first = '';
+                    $last = '';
                 }
             }
 
