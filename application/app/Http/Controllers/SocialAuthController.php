@@ -135,12 +135,9 @@ final class SocialAuthController extends Controller
             if ($provider === 'google' || $provider === 'facebook') {
                 $deepLinkUrl = 'myofficeapp://auth/success?token=' . urlencode($user->api_key);
                 
-                // Check if request is from browser (User-Agent check) or has show_token param
-                $userAgent = $request->header('User-Agent', '');
-                $isBrowser = strpos($userAgent, 'Mozilla') !== false || $request->has('show_token');
-                
-                // If testing in browser, show token on page instead of deep link redirect
-                if ($isBrowser || app()->environment('local')) {
+                // Only show HTML page if explicitly requested via show_token parameter
+                // Otherwise, always redirect to deep link
+                if ($request->has('show_token')) {
                     $html = '<!DOCTYPE html>
 <html>
 <head>
@@ -173,6 +170,7 @@ final class SocialAuthController extends Controller
                     return response($html)->header('Content-Type', 'text/html');
                 }
                 
+                // Always redirect to deep link
                 return redirect($deepLinkUrl);
             }
 
