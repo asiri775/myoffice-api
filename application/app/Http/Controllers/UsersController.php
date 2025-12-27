@@ -389,6 +389,89 @@ final class UsersController extends Controller
     }
 
     /**
+     * POST /api/user/details
+     * Get user details (POST request)
+     */
+    public function getUserDetails(Request $request): JsonResponse
+    {
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return $this->unauthorized('User not authenticated');
+            }
+
+            // Optionally get user_id from request (for admin or specific user lookup)
+            $requestedUserId = $request->input('user_id');
+            
+            // If user_id is provided, use it (could add admin check here)
+            // Otherwise, use authenticated user's ID
+            $targetUserId = $requestedUserId ? (int)$requestedUserId : $userId;
+
+            $user = Users::find($targetUserId);
+            if (!$user) {
+                return $this->notFound('User not found');
+            }
+
+            // Get username from meta or use email as fallback
+            $username = UserMeta::getValue($targetUserId, 'username') ?? $user->email;
+
+            // Format birthday for response
+            $birthdayFormatted = null;
+            if ($user->birthday) {
+                if ($user->birthday instanceof \Carbon\Carbon) {
+                    $birthdayFormatted = $user->birthday->format('Y-m-d');
+                } elseif (is_string($user->birthday)) {
+                    $birthdayFormatted = date('Y-m-d', strtotime($user->birthday));
+                } else {
+                    $birthdayFormatted = $user->birthday;
+                }
+            }
+
+            // Get avatar from user meta
+            $avatar = UserMeta::getValue($targetUserId, 'social_meta_avatar') 
+                   ?? UserMeta::getValue($targetUserId, 'social_google_avatar')
+                   ?? UserMeta::getValue($targetUserId, 'social_facebook_avatar');
+
+            // Get social links
+            $socialLinks = [
+                'linkedin' => UserMeta::getValue($targetUserId, 'linkedin'),
+                'facebook' => UserMeta::getValue($targetUserId, 'facebook'),
+                'instagram' => UserMeta::getValue($targetUserId, 'instagram'),
+                'bark' => UserMeta::getValue($targetUserId, 'bark'),
+                'meetup' => UserMeta::getValue($targetUserId, 'meetup'),
+            ];
+
+            // Prepare comprehensive response data
+            $data = [
+                'id' => $user->id,
+                'username' => $username,
+                'email' => $user->email,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'name' => $user->name,
+                'phone_number' => $user->phone,
+                'mobile_number' => $user->phone,
+                'birthday' => $birthdayFormatted,
+                'about' => $user->bio,
+                'country' => $user->country,
+                'role_id' => $user->role_id,
+                'super_host' => (bool)$user->super_host,
+                'avatar' => $avatar,
+                'social_links' => $socialLinks,
+                'created_at' => $user->created_at ? $user->created_at->toDateTimeString() : null,
+                'updated_at' => $user->updated_at ? $user->updated_at->toDateTimeString() : null,
+            ];
+
+            return $this->ok($data, 'User details retrieved successfully');
+        } catch (\Throwable $e) {
+            return $this->serverError('Failed to retrieve user details', [
+                'exception' => class_basename($e),
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * GET /api/user/reviews
      * Get user reviews
      */

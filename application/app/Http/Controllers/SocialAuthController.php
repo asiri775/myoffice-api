@@ -47,8 +47,18 @@ final class SocialAuthController extends Controller
 
             $email = strtolower(trim($social->getEmail() ?? ''));
             $name  = trim($social->getName() ?? '');
-            $first = trim($social->user['given_name'] ?? ($social->offsetGet('first_name') ?? ''));
-            $last  = trim($social->user['family_name'] ?? ($social->offsetGet('last_name') ?? ''));
+            
+            // Handle different provider data structures
+            // Google uses: given_name, family_name
+            // Facebook uses: first_name, last_name
+            if ($provider === 'google') {
+                $first = trim($social->user['given_name'] ?? '');
+                $last  = trim($social->user['family_name'] ?? '');
+            } else {
+                // Facebook and other providers
+                $first = trim($social->user['first_name'] ?? $social->offsetGet('first_name') ?? '');
+                $last  = trim($social->user['last_name'] ?? $social->offsetGet('last_name') ?? '');
+            }
 
             if (!$first || !$last) {
                 if ($name) {
@@ -110,6 +120,45 @@ final class SocialAuthController extends Controller
             // 5) For Google and Facebook, redirect to deep link; for others, return JSON
             if ($provider === 'google' || $provider === 'facebook') {
                 $deepLinkUrl = 'myofficeapp://auth/success?token=' . urlencode($user->api_key);
+                
+                // Check if request is from browser (User-Agent check) or has show_token param
+                $userAgent = $request->header('User-Agent', '');
+                $isBrowser = strpos($userAgent, 'Mozilla') !== false || $request->has('show_token');
+                
+                // If testing in browser, show token on page instead of deep link redirect
+                if ($isBrowser || app()->environment('local')) {
+                    $html = '<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Success</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .token { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 5px; word-break: break-all; font-family: monospace; }
+        .info { color: #6c757d; font-size: 14px; margin-top: 10px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>✅ Authentication Successful!</h1>
+    <div class="success">
+        <strong>Logged in as:</strong> ' . htmlspecialchars($user->email) . '<br>
+        <strong>Name:</strong> ' . htmlspecialchars($user->name) . '
+    </div>
+    <h3>Your API Token:</h3>
+    <div class="token" id="token">' . htmlspecialchars($user->api_key) . '</div>
+    <button onclick="navigator.clipboard.writeText(document.getElementById(\'token\').textContent)">Copy Token</button>
+    <div class="info">
+        <p><strong>Deep Link URL:</strong><br>
+        <code>' . htmlspecialchars($deepLinkUrl) . '</code></p>
+        <p><em>Note: This deep link will work when opened from your mobile app. In browser, copy the token above.</em></p>
+    </div>
+</body>
+</html>';
+                    return response($html)->header('Content-Type', 'text/html');
+                }
+                
                 return redirect($deepLinkUrl);
             }
 
@@ -127,6 +176,36 @@ final class SocialAuthController extends Controller
             
             // For Google and Facebook, redirect with error; for others, return JSON
             if ($provider === 'google' || $provider === 'facebook') {
+                // Check if request is from browser
+                $userAgent = $request->header('User-Agent', '');
+                $isBrowser = strpos($userAgent, 'Mozilla') !== false;
+                
+                // If browser, show error page instead of deep link
+                if ($isBrowser || app()->environment('local')) {
+                    $html = '<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Error</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .info { color: #6c757d; font-size: 14px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>❌ Authentication Error</h1>
+    <div class="error">
+        <strong>Error:</strong> ' . htmlspecialchars($msg) . '
+    </div>
+    <div class="info">
+        <p>Please try again or contact support if the issue persists.</p>
+    </div>
+</body>
+</html>';
+                    return response($html)->header('Content-Type', 'text/html');
+                }
+                
                 return redirect('myofficeapp://auth/error?message=' . urlencode($msg));
             }
             
