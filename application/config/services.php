@@ -11,6 +11,7 @@ return [
         'client_id'     => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
         'redirect'      => env('FACEBOOK_REDIRECT_URI', 'https://api.mybackpocket.co/api/oauth/facebook/callback'),
+        'scopes'        => ['public_profile', 'email'],
     ],
     'twoco' => [
         'sandbox' => (bool) env('TWoco_SANDBOX', true),

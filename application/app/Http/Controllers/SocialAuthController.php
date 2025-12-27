@@ -28,7 +28,15 @@ final class SocialAuthController extends Controller
         }
 
         try {
-            $url = Socialite::driver($provider)->stateless()->redirect()->getTargetUrl();
+            $socialite = Socialite::driver($provider)->stateless();
+            
+            // Set Facebook scopes explicitly (public_profile and email are required)
+            if ($provider === 'facebook') {
+                $scopes = config('services.facebook.scopes', ['public_profile', 'email']);
+                $socialite->scopes($scopes);
+            }
+            
+            $url = $socialite->redirect()->getTargetUrl();
             return $this->ok(['url' => $url], 'Auth URL');
         } catch (\Throwable $e) {
             $msg = app()->environment('production') ? 'Unable to start social login' : $e->getMessage();
